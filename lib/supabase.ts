@@ -2370,7 +2370,6 @@ export function subscribeToInbox(
 
 type AttentionProductRow = {
   id: string;
-  owner_id: string | null;
   brand_name: string;
   name: string;
   slug: string;
@@ -2429,7 +2428,7 @@ export type AttentionBidResult = {
 };
 
 const ATTENTION_PRODUCT_COLUMNS =
-  "id, owner_id, brand_name, name, slug, logo, color, website_url, description, category, tags, status, listing_starts_at, listing_ends_at, current_bid, click_count, campaign_title, campaign_description, campaign_requirements, campaign_budget, created_at";
+  "id, brand_name, name, slug, logo, color, website_url, description, category, tags, status, listing_starts_at, listing_ends_at, current_bid, click_count, campaign_title, campaign_description, campaign_requirements, campaign_budget, created_at";
 
 /** Identified 2026-09 demo listings. Not a seed — used only to ignore those rows if they remain in Supabase. */
 const DEMO_ATTENTION_PRODUCT_IDS = new Set([
@@ -2460,17 +2459,10 @@ function supabaseErrorParts(error: unknown) {
   };
 }
 
-function isViteDev() {
-  return Boolean(import.meta.env?.DEV);
-}
-
-function attentionClientError(error: unknown, fallback: string) {
+function attentionClientError(operation: string, error: unknown, fallback: string) {
   const parts = supabaseErrorParts(error);
-  console.error("[attention]", { message: parts.message, code: parts.code, details: parts.details, hint: parts.hint });
-  const mapped = attentionErrorMessage(error, fallback);
-  if (!isViteDev() || mapped !== fallback) return mapped;
-  const extras = [parts.code && `[${parts.code}]`, parts.message, parts.details, parts.hint].filter(Boolean).join(" ");
-  return extras ? `${fallback} ${extras}` : fallback;
+  console.error("[attention]", operation, parts.code || "error");
+  return attentionErrorMessage(error, fallback);
 }
 
 function attentionErrorMessage(error: unknown, fallback: string) {
@@ -2522,7 +2514,7 @@ function rowToAttentionProduct(
   const listingEndsAt = asEpoch(row.listing_ends_at);
   const product: Product = {
     id: row.id,
-    brandId: row.owner_id || "",
+    brandId: "",
     brandName: row.brand_name,
     name: row.name,
     slug: row.slug,
@@ -2555,15 +2547,15 @@ function rowToAttentionProduct(
 function isAttentionProductRow(value: unknown): value is AttentionProductRow {
   if (!value || typeof value !== "object") return false;
   const row = value as Partial<AttentionProductRow>;
-  return typeof row.id === "string" && (row.owner_id == null || typeof row.owner_id === "string") && typeof row.slug === "string" && typeof row.website_url === "string";
+  return typeof row.id === "string" && typeof row.slug === "string" && typeof row.website_url === "string";
 }
 
-export async function getAttentionSessionUser(): Promise<{ id: string; email: string } | null> {
+export async function getAttentionSessionUser(): Promise<{ id: string } | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
   const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session?.user) return null;
-  return { id: data.session.user.id, email: data.session.user.email || "" };
+  if (error || !data.session?.user?.id) return null;
+  return { id: data.session.user.id };
 }
 
 export async function loadAttentionMarketplace(): Promise<{
@@ -2575,29 +2567,29 @@ export async function loadAttentionMarketplace(): Promise<{
   const supabase = getSupabase();
   if (!supabase) return { products: [], activity: [], skipped: true };
   const { data: productData, error: productError } = await supabase
-    .from("attention_products")
+    .from("attention_products_public")
     .select(ATTENTION_PRODUCT_COLUMNS);
   if (productError) {
     return {
       products: [],
       activity: [],
       skipped: isMissingRelation(productError),
-      error: isMissingRelation(productError) ? undefined : attentionClientError(productError, "Could not load the marketplace."),
+      error: isMissingRelation(productError) ? undefined : attentionClientError("load_products", productError, "Could not load the marketplace."),
     };
   }
   const productRows = (productData || []).filter(isAttentionProductRow).filter((row) => !isDemoAttentionProductId(row.id));
   const productIds = productRows.map((row) => row.id);
   const [{ data: bidData, error: bidError }, { data: activityData, error: activityError }] = await Promise.all([
     productIds.length
-      ? supabase.from("attention_bids").select("id, product_id, amount, created_at").in("product_id", productIds).order("created_at", { ascending: false })
+      ? supabase.from("attention_bids_public").select("id, product_id, amount, created_at").in("product_id", productIds).order("created_at", { ascending: false })
       : Promise.resolve({ data: [] as AttentionBidRow[], error: null }),
-    supabase.from("attention_activity").select("id, product_id, type, amount, rank, created_at").order("created_at", { ascending: false }).limit(120),
+    supabase.from("attention_activity_public").select("id, product_id, type, amount, rank, created_at").order("created_at", { ascending: false }).limit(120),
   ]);
   if (bidError && !isMissingRelation(bidError)) {
-    return { products: [], activity: [], error: attentionClientError(bidError, "Could not load bid history.") };
+    return { products: [], activity: [], error: attentionClientError("load_bids", bidError, "Could not load bid history.") };
   }
   if (activityError && !isMissingRelation(activityError)) {
-    return { products: [], activity: [], error: attentionClientError(activityError, "Could not load marketplace activity.") };
+    return { products: [], activity: [], error: attentionClientError("load_activity", activityError, "Could not load marketplace activity.") };
   }
   const bidsByProduct = new Map<string, Bid[]>();
   for (const row of (bidData || []) as AttentionBidRow[]) {
@@ -2632,7 +2624,7 @@ export async function placeAttentionBid(productId: string, increment: number): P
   if (incrementError) return { error: incrementError };
   const { data, error } = await supabase.rpc("place_attention_bid", { p_product_id: productId, p_increment: increment });
   if (error) {
-    return { error: attentionClientError(error, "Could not place this bid.") };
+    return { error: attentionClientError("place_bid", error, "Could not place this bid.") };
   }
   const row = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
   const productIdOut = typeof row?.product_id === "string" ? row.product_id : "";
@@ -2642,12 +2634,8 @@ export async function placeAttentionBid(productId: string, increment: number): P
   const rank = asNumber(row?.resulting_rank, 0);
   const createdAt = typeof row?.created_at === "string" ? asEpoch(row.created_at) : Date.now();
   if (!productIdOut || !bidId || !Number.isInteger(bidAmount) || bidAmount < 1 || rank < 1) {
-    console.error("[attention]", { message: "Unexpected place_attention_bid payload", data });
-    return {
-      error: isViteDev()
-        ? `Could not place this bid. Unexpected RPC payload: ${JSON.stringify(data)}`
-        : "Could not place this bid.",
-    };
+    console.error("[attention]", "place_bid", "unexpected_payload");
+    return { error: "Could not place this bid." };
   }
   return { result: { productId: productIdOut, bidId, amount: bidAmount, currentBid, rank, createdAt } };
 }
@@ -2658,7 +2646,7 @@ export async function recordAttentionVisit(productId: string): Promise<{ clickCo
   if (!isAttentionProductId(productId)) return { error: "Product not found." };
   const { data, error } = await supabase.rpc("record_attention_visit", { p_product_id: productId });
   if (error) {
-    return { error: attentionClientError(error, "Could not record this visit.") };
+    return { error: attentionClientError("record_visit", error, "Could not record this visit.") };
   }
   const row = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
   const clickCount = asNumber(row?.click_count, 0);
@@ -2688,7 +2676,7 @@ export async function publishAttentionListing(input: AttentionListingWrite): Pro
     p_campaign_budget: input.campaign ? input.campaign.budget : null,
   });
   if (error) {
-    return { error: attentionClientError(error, "Could not publish this listing.") };
+    return { error: attentionClientError("publish_listing", error, "Could not publish this listing.") };
   }
   if (!isAttentionProductRow(data)) return { error: "Could not publish this listing." };
   const now = Date.now();

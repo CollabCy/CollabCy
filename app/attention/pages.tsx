@@ -1,10 +1,10 @@
 'use client';
-import {useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import Link from '../ui/app-link';
 import {ArrowUpRight,ArrowRight,Check,Trophy,Layers,TrendingUp,Users,MousePointer2,ChevronRight,Search,Heart,BarChart3,Crown,Sparkles} from 'lucide-react';
 import {Accordion,AccordionItem,AccordionTrigger,AccordionContent} from '@/components/ui/accordion';
 import {PublicHeader,PublicFooter} from '../ui/public';
-import {Button,SearchBox,Pick,Empty,DemoNote} from '../ui/shared';
+import {Button,SearchBox,Empty,DemoNote} from '../ui/shared';
 import {useStore} from '../store';
 import {money} from '../data';
 import {useAttention} from './store';
@@ -12,8 +12,8 @@ import {attentionCategories,getRankedProducts,getFilteredProducts,isActive,timeA
 import {ProductLogo,LiveBadge,ActivityList,VisitDialog,BidDialog,ProductMetrics,lastBidAddOn} from './components';
 
 const faqs=[
-  ['How does ranking work?','Products with higher current bids rank higher. When bids are equal, the earlier bid keeps its position. Expired listings leave the active leaderboard. Rankings here are a frontend simulation.'],
-  ['How much does it cost to list a product?',`A ${LISTING_DAYS}-day product listing has a $${LISTING_FEE} listing fee, plus your chosen initial bid (from $${MIN_INITIAL_BID}). Brand account access is free. All payments in this preview are simulated.`],
+  ['How does ranking work?','Products with higher current bids rank higher. When bids are equal, the earlier bid keeps its position. Expired listings leave the active leaderboard. Dollar amounts are simulated demo values and no real money is charged. Ranking and bid state are stored and updated in the CollabCy backend.'],
+  ['How much does it cost to list a product?',`A ${LISTING_DAYS}-day product listing has a $${LISTING_FEE} listing fee, plus your chosen initial bid (from $${MIN_INITIAL_BID}). Brand account access is free. These dollar amounts are simulated demo values. No real money is currently charged.`],
   ['Can I update my bid later?','Yes. Open a product and choose Place bid. The minimum shown is the amount needed to move above the next product, or increase the leading bid. Review your projected rank before confirming.'],
   ['What happens when a listing expires?','It leaves the active leaderboard and cannot receive new bids. Its product details and bid history remain available.'],
   ['Do I need an account to place a bid?','No. Browsing, bidding, and listing a product do not require a CollabCy account. No real payment is collected.'],
@@ -79,11 +79,8 @@ export function AttentionMarketplace(){
                   <button aria-pressed={filters.time==='48h'} onClick={()=>setFilters(v=>({...v,time:'48h'}))}>Last 48 hours</button>
                 </div>
                 <div id="market-search"><SearchBox placeholder="Search products, brands, or categories…" value={filters.query} onChange={query=>setFilters(v=>({...v,query}))}/></div>
-                <Pick value={filters.category==='All'?'All categories':filters.category} options={['All categories',...attentionCategories]} onChange={v=>setCategory(v==='All categories'?'All':v)} label="Product category"/>
               </div>
-              <div className="attention-chips" role="group" aria-label="Product categories">
-                {['All',...attentionCategories].map(category=><button key={category} aria-pressed={filters.category===category} onClick={()=>setCategory(category)}>{category}</button>)}
-              </div>
+              <CategoryChips value={filters.category} onChange={setCategory}/>
             </div>
             {filtered.length
               ? <div className="attention-products" role="list">
@@ -123,7 +120,7 @@ export function AttentionMarketplace(){
         <div className="attention-steps">
           {[
             {icon:Layers,title:'List your product',text:'Tell creators what you’re building. Your bid determines your ranking.'},
-            {icon:TrendingUp,title:'Add to your bid',text:'Increase your position anytime by paying only the add-on.'},
+            {icon:TrendingUp,title:'Add to your bid',text:'Increase your position anytime by adding only the simulated add-on. No real money is charged.'},
             {icon:Users,title:'Move up the ranking',text:'Climb as your cumulative bid grows.'},
             {icon:Trophy,title:'Get discovered',text:'Creators explore and find your product.'},
           ].map(({icon:Icon,title,text},index)=><div key={title}><span>{String(index+1).padStart(2,'0')}</span><Icon/><h3>{title}</h3><p>{text}</p></div>)}
@@ -151,6 +148,46 @@ export function AttentionMarketplace(){
     <VisitDialog productId={visit} onClose={()=>setVisit(null)} onBid={id=>{setVisit(null);setBid(id);}}/>
     <BidDialog productId={bid} onClose={()=>setBid(null)}/>
   </>;
+}
+
+function CategoryChips({value,onChange}:{value:string;onChange:(category:string)=>void}){
+  const scroller=useRef<HTMLDivElement>(null);
+  const [overflows,setOverflows]=useState(false);
+  const [canScrollMore,setCanScrollMore]=useState(false);
+  useEffect(()=>{
+    const el=scroller.current;
+    if(!el)return;
+    const update=()=>{
+      const extra=el.scrollWidth-el.clientWidth;
+      setOverflows(extra>4);
+      const last=el.querySelector('button:last-of-type');
+      if(!last){setCanScrollMore(false);return;}
+      const edge=el.getBoundingClientRect().right-36;
+      setCanScrollMore(last.getBoundingClientRect().right>edge+1);
+    };
+    update();
+    el.addEventListener('scroll',update,{passive:true});
+    const observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(update);
+    observer?.observe(el);
+    window.addEventListener('resize',update);
+    return()=>{
+      el.removeEventListener('scroll',update);
+      observer?.disconnect();
+      window.removeEventListener('resize',update);
+    };
+  },[]);
+  const scrollRight=()=>{
+    const el=scroller.current;
+    if(!el)return;
+    const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollBy({left:Math.max(Math.round(el.clientWidth*.62),180),behavior:reduce?'auto':'smooth'});
+  };
+  return <div className={`attention-chip-strip${overflows?' is-overflowing':''}${canScrollMore?' has-more':''}`}>
+    <div ref={scroller} className="attention-chips" role="group" aria-label="Product categories">
+      {['All',...attentionCategories].map(category=><button type="button" key={category} aria-pressed={value===category} onClick={()=>onChange(category)}>{category}</button>)}
+    </div>
+    <button type="button" className="attention-chip-next" aria-label="Scroll categories right" disabled={!canScrollMore} tabIndex={overflows?0:-1} onClick={scrollRight}><ArrowRight size={16} aria-hidden="true"/></button>
+  </div>;
 }
 
 function Breadcrumb({name}:{name?:string}){

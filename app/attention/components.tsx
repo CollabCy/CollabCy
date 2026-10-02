@@ -239,7 +239,7 @@ export function BidDialog({productId,onClose}:{productId:string|null;onClose:()=
                     <Button onClick={()=>step==='review'?advance('payment'):confirm()}>{step==='review'?'Continue to demo checkout':'Confirm demo bid'}<ArrowRight size={16}/></Button>
                   </div>
                 </>}
-            <DemoNote>Frontend simulation · No login required · No real payment.</DemoNote>
+            <DemoNote>Simulated demo dollars · No login required · No real payment. Ranking is stored in CollabCy.</DemoNote>
           </>}
     </>}
   </MarketDialog>;

@@ -20,11 +20,11 @@ export function createAttentionBackend(): AttentionBackend {
     async load() {
       const result = await loadAttentionMarketplace();
       if (result.skipped) {
-        if (result.error) console.error("[attention]", result.error);
+        if (result.error) console.error("[attention]", "load", "skipped");
         return { products: [], activity: [], unavailable: true, error: result.error || "Marketplace backend is not configured." };
       }
       if (result.error) {
-        console.error("[attention]", result.error);
+        console.error("[attention]", "load", "error");
         return { products: [], activity: [], error: result.error };
       }
       return { products: result.products, activity: result.activity };
