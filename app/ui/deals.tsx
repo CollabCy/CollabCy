@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
 import {useRouter,useSearchParams} from 'next/navigation';
+import {toInAppPath} from '@/lib/app-origin';
 import {ArrowLeft,ArrowRight,ArrowUpRight,Send,MessageSquare,CalendarDays,Check,CheckCircle2,ShieldCheck,FileText,ExternalLink,Download,Flag,RotateCcw,Star,Handshake,Wallet} from 'lucide-react';
 import {toast} from 'sonner';
 import {useStore} from '../store';
@@ -292,8 +293,8 @@ function RemoteMessages(){
     if(!id)return;
     if(id===selected&&requested===id){setMobileChat(true);return}
     const href=`/${s.role}/messages?id=${encodeURIComponent(id)}`;
-    if(mode==='replace')router.replace(href);
-    else router.push(href);
+    if(mode==='replace')router.replace(toInAppPath(href));
+    else router.push(toInAppPath(href));
     setText('');
     setSending(false);
     setMobileChat(true);

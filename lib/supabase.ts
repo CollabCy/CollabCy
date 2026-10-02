@@ -3,7 +3,8 @@ import { toast } from "sonner";
 import type { ActivityEvent, Bid, Product } from "@/app/attention/model";
 import { isActive, LISTING_DAYS, safeWebsite } from "@/app/attention/model";
 import { isAttentionProductId, validateAttentionIncrement, validateAttentionListing } from "@/app/attention/validation";
-import { blankProfile, brandCanBrowseCreators, campaignLetter, canonicalMarketplaceRole, isCreatorUserId, isUuid, realDirectoryCreators, roleConflictNotice, type Campaign, type CampaignApplication, type ChatMessage, type Connection, type ConnectionStatus, type Conversation, type Creator, type Notice, type NotificationType, type Profile, type Role, type SocialAccount, type State, type ApplicationStatus } from "@/app/data";
+import { blankProfile, campaignLetter, canonicalMarketplaceRole, isCreatorUserId, isUuid, realDirectoryCreators, roleConflictNotice, type Campaign, type CampaignApplication, type ChatMessage, type Connection, type ConnectionKind, type ConnectionStatus, type Conversation, type Creator, type Notice, type NotificationType, type Profile, type Role, type SocialAccount, type State, type ApplicationStatus, type VerificationStatus } from "@/app/data";
+import { sanitizeNextParam, toInAppPath } from "@/lib/app-origin";
 import { isDealStatus, type CollaborationDeal, type DealVerificationEvent } from "@/app/deals/model";
 
 function publicEnv(name: "NEXT_PUBLIC_SUPABASE_URL" | "NEXT_PUBLIC_SUPABASE_ANON_KEY") {
@@ -75,18 +76,24 @@ export function identityFromSupabaseUser(user: User): {
   const meta = user.user_metadata ?? {};
   const identityData =
     user.identities?.find((item) => item.provider === "google")?.identity_data ??
+    user.identities?.find((item) => item.provider === "x")?.identity_data ??
+    user.identities?.find((item) => item.provider === "facebook")?.identity_data ??
     user.identities?.[0]?.identity_data ??
     {};
   const name =
     (typeof meta.full_name === "string" && meta.full_name.trim()) ||
     (typeof meta.name === "string" && meta.name.trim()) ||
+    (typeof meta.user_name === "string" && meta.user_name.trim()) ||
+    (typeof identityData.full_name === "string" && identityData.full_name.trim()) ||
+    (typeof identityData.name === "string" && identityData.name.trim()) ||
     user.email ||
-    "Google user";
+    "CollabCy user";
   const avatar = firstHttpUrl(
     meta.avatar_url,
     meta.picture,
     identityData.avatar_url,
     identityData.picture,
+    identityData.profile_image_url,
   );
   return { name, email: user.email || "", avatar };
 }
@@ -96,15 +103,30 @@ export function persistMarketplace(state: { session?: boolean; remoteWorkspace?:
 }
 
 export function postAuthPath(role: Role, onboarded: boolean, next?: string | null, platformVerifier = false): string {
-  if (platformVerifier && onboarded && next !== "promote") return "/admin";
-  if (onboarded) {
-    return role === "brand" && next === "promote"
-      ? "/brand/products/new"
-      : `/${role}/dashboard`;
+  const safeNext = sanitizeNextParam(next);
+  const directory = workspaceDirectoryPath(role, safeNext);
+  if (!onboarded) {
+    if (role === "brand" && safeNext === "promote") return "/onboarding?next=promote";
+    if (safeNext && directory) return `/onboarding?next=${encodeURIComponent(safeNext)}`;
+    return "/onboarding";
   }
-  return role === "brand" && next === "promote"
-    ? "/onboarding?next=promote"
-    : "/onboarding";
+  if (directory) return directory;
+  if (platformVerifier && safeNext !== "promote") return "/admin";
+  return role === "brand" && safeNext === "promote"
+    ? "/brand/products/new"
+    : `/${role}/dashboard`;
+}
+
+function workspaceDirectoryPath(role: Role, next?: string | null): string | null {
+  if (!next || typeof next !== "string") return null;
+  const path = toInAppPath(next);
+  if (path === "/creators" || path.startsWith("/creators/")) {
+    return `/${role}/creators${path.slice("/creators".length)}`;
+  }
+  if (path === "/brands" || path.startsWith("/brands/")) {
+    return `/${role}/brands${path.slice("/brands".length)}`;
+  }
+  return null;
 }
 
 export function applyProviderSignIn(
@@ -146,6 +168,8 @@ type ProfileRow = {
   avatar: string | null;
   portfolio: string[] | null;
   created_at?: string;
+  verification_status?: string | null;
+  verification_rejection_reason?: string | null;
 };
 
 type ProfileFetchResult =
@@ -155,7 +179,7 @@ type ProfileFetchResult =
   | { status: "skipped" };
 
 const PROFILE_COLUMNS =
-  "user_id, role, name, email, bio, handle, website, niche, platforms, followers, impressions, rate, location, available, avatar, portfolio, created_at";
+  "user_id, role, name, email, bio, handle, website, niche, platforms, followers, impressions, rate, location, available, avatar, portfolio, created_at, verification_status, verification_rejection_reason";
 
 function asRole(value: unknown): Role | null {
   return value === "brand" || value === "creator" ? value : null;
@@ -219,7 +243,13 @@ function rowToProfile(row: ProfileRow): Profile {
     available: row.available !== false,
     avatar: row.avatar || undefined,
     portfolio: asStringArray(row.portfolio),
+    verificationStatus: asVerificationStatus(row.verification_status),
+    verificationRejectionReason: row.verification_rejection_reason || "",
   };
+}
+
+function asVerificationStatus(value: unknown): VerificationStatus {
+  return value === "pending" || value === "approved" || value === "rejected" ? value : "not_requested";
 }
 
 function profileWritePayload(userId: string, role: Role, profile: Profile) {
@@ -705,31 +735,19 @@ export async function syncMySocialAccounts(
   return listMySocialAccounts();
 }
 
-async function currentBrandHasCampaign(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<{ allowed: boolean; error?: string }> {
-  const { count, error } = await supabase.from("campaigns").select("id", { count: "exact", head: true }).eq("user_id", userId);
-  if (error) return { allowed: false, error: publicErrorMessage(error, "Could not load campaigns.") };
-  return { allowed: (count || 0) > 0 };
-}
-
 export async function listPublicCreatorSocialAccounts(userIds?: string[]): Promise<{
   accountsByUser: Record<string, SocialAccount[]>;
   error?: string;
   skipped?: boolean;
 }> {
   const auth = await requireAuthenticatedUser();
-  if (auth.error) return { accountsByUser: {}, error: auth.error };
+  if (auth.error) return { accountsByUser: {}, error: publicErrorMessage(auth.error, "Could not load profiles.") };
   if (auth.skipped || !auth.supabase || !auth.user) return { accountsByUser: {}, skipped: true };
-  const eligible = await currentBrandHasCampaign(auth.supabase, auth.user.id);
-  if (eligible.error) return { accountsByUser: {}, error: eligible.error };
-  if (!eligible.allowed) return { accountsByUser: {} };
   if (userIds && !userIds.length) return { accountsByUser: {} };
   let query = auth.supabase.from("social_accounts").select(SOCIAL_COLUMNS);
   if (userIds?.length) query = query.in("user_id", userIds);
   const { data, error } = await query.order("created_at", { ascending: true });
-  if (error) return { accountsByUser: {}, error: error.message };
+  if (error) return { accountsByUser: {}, error: publicErrorMessage(error, "Could not load profiles.") };
   const accountsByUser: Record<string, SocialAccount[]> = {};
   for (const row of (data as SocialAccountRow[] | null) || []) {
     const list = accountsByUser[row.user_id] || (accountsByUser[row.user_id] = []);
@@ -771,23 +789,22 @@ function publicRowToCreator(row: PublicCreatorRow, socials: SocialAccount[]): Cr
   };
 }
 
+const PUBLIC_CREATOR_COLUMNS =
+  "user_id, role, name, bio, handle, website, niche, platforms, followers, impressions, rate, location, available, avatar, portfolio, created_at";
+const PUBLIC_BRAND_COLUMNS =
+  "user_id, role, name, bio, handle, website, niche, platforms, location, avatar, portfolio, created_at";
+
 export async function listPublicCreators(): Promise<{
   creators: Creator[];
   error?: string;
   skipped?: boolean;
-  gated?: boolean;
 }> {
   const auth = await requireAuthenticatedUser();
   if (auth.error) return { creators: [], error: publicErrorMessage(auth.error, "Could not load creators.") };
   if (auth.skipped || !auth.supabase || !auth.user) return { creators: [], skipped: true };
-  const eligible = await currentBrandHasCampaign(auth.supabase, auth.user.id);
-  if (eligible.error) return { creators: [], error: eligible.error };
-  if (!eligible.allowed) return { creators: [], gated: true };
   const { data, error } = await auth.supabase
     .from("public_creators")
-    .select(
-      "user_id, role, name, bio, handle, website, niche, platforms, followers, impressions, rate, location, available, avatar, portfolio, created_at",
-    )
+    .select(PUBLIC_CREATOR_COLUMNS)
     .order("created_at", { ascending: false });
   if (error) return { creators: [], error: publicErrorMessage(error, "Could not load creators.") };
   const rows = ((data as PublicCreatorRow[] | null) ?? []).filter((row) => isCreatorUserId(row.user_id));
@@ -796,6 +813,71 @@ export async function listPublicCreators(): Promise<{
   return {
     creators: rows.map((row) => publicRowToCreator(row, social.accountsByUser[row.user_id] || [])).filter((creator) => isCreatorUserId(creator.id)),
   };
+}
+
+export async function getPublicCreator(userId: string): Promise<{ creator?: Creator | null; error?: string; skipped?: boolean }> {
+  if (!isUuid(userId)) return { creator: null };
+  const auth = await requireAuthenticatedUser();
+  if (auth.error) return { error: publicErrorMessage(auth.error, "Could not load this creator.") };
+  if (auth.skipped || !auth.supabase || !auth.user) return { skipped: true };
+  const { data, error } = await auth.supabase.from("public_creators").select(PUBLIC_CREATOR_COLUMNS).eq("user_id", userId).maybeSingle();
+  if (error) return { error: publicErrorMessage(error, "Could not load this creator.") };
+  if (!data) return { creator: null };
+  const social = await listPublicCreatorSocialAccounts([userId]);
+  if (social.error) return { error: social.error };
+  return { creator: publicRowToCreator(data as PublicCreatorRow, social.accountsByUser[userId] || []) };
+}
+
+function publicRowToBrand(row: PublicCreatorRow): Creator {
+  const platforms = asStringArray(row.platforms);
+  const name = row.name || "";
+  return {
+    id: row.user_id,
+    name,
+    handle: row.handle || "",
+    initials: initialsFromName(name),
+    bio: row.bio || "",
+    niche: row.niche || "",
+    platform: platforms[0] || "",
+    followers: 0,
+    impressions: 0,
+    rate: 0,
+    rating: 0,
+    reviews: 0,
+    available: true,
+    color: colorFromId(row.user_id),
+    location: row.location || "",
+    engagement: 0,
+    avatar: row.avatar || undefined,
+    platforms,
+    website: row.website || "",
+    portfolio: asStringArray(row.portfolio),
+  };
+}
+
+export async function listPublicBrands(): Promise<{
+  brands: Creator[];
+  error?: string;
+  skipped?: boolean;
+}> {
+  const auth = await requireAuthenticatedUser();
+  if (auth.error) return { brands: [], error: publicErrorMessage(auth.error, "Could not load brands.") };
+  if (auth.skipped || !auth.supabase || !auth.user) return { brands: [], skipped: true };
+  const { data, error } = await auth.supabase.from("public_brands").select(PUBLIC_BRAND_COLUMNS).order("created_at", { ascending: false });
+  if (error) return { brands: [], error: publicErrorMessage(error, "Could not load brands.") };
+  const rows = ((data as PublicCreatorRow[] | null) ?? []).filter((row) => isUuid(row.user_id));
+  return { brands: rows.map((row) => publicRowToBrand(row)) };
+}
+
+export async function getPublicBrand(userId: string): Promise<{ brand?: Creator | null; error?: string; skipped?: boolean }> {
+  if (!isUuid(userId)) return { brand: null };
+  const auth = await requireAuthenticatedUser();
+  if (auth.error) return { error: publicErrorMessage(auth.error, "Could not load this brand.") };
+  if (auth.skipped || !auth.supabase || !auth.user) return { skipped: true };
+  const { data, error } = await auth.supabase.from("public_brands").select(PUBLIC_BRAND_COLUMNS).eq("user_id", userId).maybeSingle();
+  if (error) return { error: publicErrorMessage(error, "Could not load this brand.") };
+  if (!data) return { brand: null };
+  return { brand: publicRowToBrand(data as PublicCreatorRow) };
 }
 
 function isMissingRelation(error: unknown) {
@@ -813,20 +895,27 @@ function publicErrorMessage(error: unknown, fallback: string) {
     const copy = roleConflictNotice(msg.includes("brand account") || msg.includes("as a brand") ? "brand" : "creator");
     return `${copy.title} ${copy.body}`;
   }
-  if (msg.includes("brand to brand")) return "Brand to Brand connections are not allowed.";
-  if (msg.includes("creator to creator")) return "Creator to Creator connections are not allowed.";
-  if (msg.includes("must be between a brand and a creator")) return "Connections must be between a Brand and a Creator.";
+  if (msg.includes("campaign collaborations must be between") || msg.includes("must be between a brand and a creator")) {
+    return "Campaign invitations must be between a Brand and a Creator.";
+  }
   if (msg.includes("already have a pending") || msg.includes("already connected")) {
     return msg.includes("connected")
-      ? "You’re already connected with this creator on this campaign."
-      : "You already have a pending request with this creator.";
+      ? "You’re already connected with this account."
+      : "You already have a pending request with this account.";
   }
   if (code === "23505" || msg.includes("duplicate") || msg.includes("unique") || msg.includes("already applied")) {
-    return "You already applied to this campaign.";
+    return msg.includes("verification") ? "Verification is already pending." : "You already applied to this campaign.";
   }
+  if (msg.includes("choose someone") || msg.includes("account not found")) return "Choose someone to connect with.";
   if (msg.includes("choose a creator") || msg.includes("creator not found")) return "Choose a creator to connect with.";
   if (msg.includes("write a short message")) return "Please write a short message before sending.";
   if (msg.includes("valid proposed rate")) return "Enter a valid proposed rate.";
+  if (msg.includes("only creators can request")) return "Only creators can request verification.";
+  if (msg.includes("already pending")) return "Verification is already pending.";
+  if (msg.includes("already verified")) return "You are already verified.";
+  if (msg.includes("complete your creator profile")) return "Complete your creator profile before requesting verification.";
+  if (msg.includes("rejection reason is required")) return "A rejection reason is required.";
+  if (msg.includes("no pending verification")) return "There is no pending verification request.";
   if (code === "42501" || msg.includes("row-level security") || msg.includes("permission") || msg.includes("not allowed")) {
     return "You don’t have permission to do that.";
   }
@@ -872,7 +961,8 @@ function publicErrorMessage(error: unknown, fallback: string) {
 const APPLICATION_COLUMNS =
   "id, campaign_id, creator_id, creator_name, creator_avatar, creator_handle, creator_rate, creator_niche, creator_followers, creator_impressions, campaign_title, campaign_brand, campaign_color, message, proposed_rate, status, initiated_by, created_at";
 
-const CONNECTION_COLUMNS = "id, campaign_id, application_id, brand_id, creator_id, status, created_at";
+const CONNECTION_COLUMNS =
+  "id, campaign_id, application_id, brand_id, creator_id, status, kind, requested_by, party_a_name, party_a_handle, party_a_avatar, party_b_name, party_b_handle, party_b_avatar, created_at";
 
 type ApplicationRow = {
   id: string;
@@ -897,11 +987,19 @@ type ApplicationRow = {
 
 type ConnectionRow = {
   id: string;
-  campaign_id: string;
+  campaign_id: string | null;
   application_id: string | null;
   brand_id: string;
   creator_id: string;
   status: string;
+  kind?: string | null;
+  requested_by?: string | null;
+  party_a_name?: string | null;
+  party_a_handle?: string | null;
+  party_a_avatar?: string | null;
+  party_b_name?: string | null;
+  party_b_handle?: string | null;
+  party_b_avatar?: string | null;
   created_at: string;
   campaigns?: { title?: string; brand_name?: string; color?: string } | { title?: string; brand_name?: string; color?: string }[] | null;
   campaign_applications?: {
@@ -965,23 +1063,36 @@ function rowToApplication(row: ApplicationRow): CampaignApplication {
   };
 }
 
-function rowToConnection(row: ConnectionRow): Connection {
+function asConnectionKind(value: unknown): ConnectionKind {
+  return value === "network" ? "network" : "collaboration";
+}
+
+function rowToConnection(row: ConnectionRow, userId?: string): Connection {
   const campaign = oneEmbed(row.campaigns);
   const application = oneEmbed(row.campaign_applications);
+  const viewerIsRequester = userId ? userId === row.brand_id : true;
+  const partnerName = viewerIsRequester
+    ? application?.creator_name || row.party_b_name || ""
+    : row.party_a_name || campaign?.brand_name || application?.campaign_brand || "";
+  const partnerHandle = viewerIsRequester ? application?.creator_handle || row.party_b_handle || "" : row.party_a_handle || "";
+  const partnerAvatar = viewerIsRequester
+    ? application?.creator_avatar || row.party_b_avatar || undefined
+    : row.party_a_avatar || undefined;
   return {
     id: row.id,
-    campaignId: row.campaign_id,
+    campaignId: row.campaign_id || "",
     applicationId: row.application_id || undefined,
     brandId: row.brand_id,
     creatorId: row.creator_id,
     status: asConnectionStatus(row.status),
+    kind: asConnectionKind(row.kind),
     created: Date.parse(row.created_at) || Date.now(),
-    campaignTitle: campaign?.title || application?.campaign_title || "",
-    campaignBrand: campaign?.brand_name || application?.campaign_brand || "",
+    campaignTitle: campaign?.title || application?.campaign_title || (row.kind === "network" ? "Connection" : ""),
+    campaignBrand: campaign?.brand_name || application?.campaign_brand || row.party_a_name || "",
     campaignColor: campaign?.color || application?.campaign_color || "#e8edff",
-    partnerName: application?.creator_name || "",
-    partnerHandle: application?.creator_handle || "",
-    partnerAvatar: application?.creator_avatar || undefined,
+    partnerName,
+    partnerHandle,
+    partnerAvatar: partnerAvatar || undefined,
     proposedRate: asNumber(application?.proposed_rate, 0),
     message: application?.message || "",
   };
@@ -1139,6 +1250,7 @@ export async function listMyConnections(): Promise<{
   const auth = await requireAuthenticatedUser();
   if (auth.error) return { connections: [], error: publicErrorMessage(auth.error, "Could not load collaborations.") };
   if (auth.skipped || !auth.supabase || !auth.user) return { connections: [], skipped: true };
+  const userId = auth.user.id;
   const { data, error } = await auth.supabase
     .from("connections")
     .select(
@@ -1146,7 +1258,7 @@ export async function listMyConnections(): Promise<{
     )
     .order("created_at", { ascending: false });
   if (error) return { connections: [], error: publicErrorMessage(error, "Could not load collaborations.") };
-  return { connections: (data as ConnectionRow[] | null)?.map(rowToConnection) ?? [] };
+  return { connections: (data as ConnectionRow[] | null)?.map((row) => rowToConnection(row, userId)) ?? [] };
 }
 
 export async function createConnection(input: {
@@ -1174,7 +1286,7 @@ export async function createConnection(input: {
     )
     .maybeSingle();
   if (error) return { error: publicErrorMessage(error, "Could not create this connection.") };
-  if (data) return { connection: rowToConnection(data as ConnectionRow) };
+  if (data) return { connection: rowToConnection(data as ConnectionRow, auth.user.id) };
   const existing = await listMyConnections();
   if (existing.error) return { error: existing.error };
   return {
@@ -1182,6 +1294,25 @@ export async function createConnection(input: {
       (item) => item.campaignId === input.campaignId && item.creatorId === input.creatorId,
     ),
   };
+}
+
+export async function createNetworkConnection(
+  targetUserId: string,
+  message = "",
+): Promise<{ connection?: Connection; error?: string }> {
+  if (!isUuid(targetUserId)) return { error: "Choose someone to connect with." };
+  const auth = await requireAuthenticatedUser();
+  if (auth.error) return { error: publicErrorMessage(auth.error, "Could not create this connection.") };
+  if (auth.skipped || !auth.supabase || !auth.user) return { error: "Sign in to connect." };
+  if (targetUserId === auth.user.id) return { error: "Choose someone to connect with." };
+  const { data, error } = await auth.supabase.rpc("create_network_connection", {
+    p_target_user_id: targetUserId,
+    p_message: message.trim(),
+  });
+  if (error) return { error: publicErrorMessage(error, "Could not create this connection.") };
+  const existing = await listMyConnections();
+  if (existing.error) return { error: existing.error };
+  return { connection: existing.connections.find((item) => item.id === data) };
 }
 
 export async function closeConnection(id: string): Promise<{ connection?: Connection; error?: string }> {
@@ -1198,7 +1329,7 @@ export async function closeConnection(id: string): Promise<{ connection?: Connec
     .maybeSingle();
   if (error) return { error: publicErrorMessage(error, "Could not close this collaboration.") };
   if (!data) return { error: "This collaboration could not be updated." };
-  return { connection: rowToConnection(data as ConnectionRow) };
+  return { connection: rowToConnection(data as ConnectionRow, auth.user.id) };
 }
 
 const DEAL_COLUMNS =
@@ -1466,6 +1597,108 @@ export async function listVerificationQueue(
   return { items };
 }
 
+export type CreatorVerificationQueueItem = {
+  id: string;
+  creatorId: string;
+  status: "pending" | "approved" | "rejected";
+  submittedAt: number;
+  reviewedAt?: number;
+  reviewedBy?: string;
+  rejectionReason: string;
+  name: string;
+  bio: string;
+  handle: string;
+  website: string;
+  niche: string;
+  platforms: string[];
+  followers: number;
+  impressions: number;
+  rate: number;
+  location: string;
+  available: boolean;
+  avatar?: string;
+  portfolio: string[];
+};
+
+function asQueueVerificationStatus(value: unknown): "pending" | "approved" | "rejected" {
+  return value === "approved" || value === "rejected" ? value : "pending";
+}
+
+function rowToCreatorVerificationItem(row: Record<string, unknown>): CreatorVerificationQueueItem | null {
+  const creatorId = typeof row.creator_id === "string" ? row.creator_id : "";
+  const id = typeof row.id === "string" ? row.id : "";
+  if (!id || !creatorId) return null;
+  return {
+    id,
+    creatorId,
+    status: asQueueVerificationStatus(row.status),
+    submittedAt: parseStamp(typeof row.submitted_at === "string" ? row.submitted_at : ""),
+    reviewedAt: parseStamp(typeof row.reviewed_at === "string" ? row.reviewed_at : "") || undefined,
+    reviewedBy: typeof row.reviewed_by === "string" ? row.reviewed_by : undefined,
+    rejectionReason: typeof row.rejection_reason === "string" ? row.rejection_reason : "",
+    name: typeof row.name === "string" ? row.name : "",
+    bio: typeof row.bio === "string" ? row.bio : "",
+    handle: typeof row.handle === "string" ? row.handle : "",
+    website: typeof row.website === "string" ? row.website : "",
+    niche: typeof row.niche === "string" ? row.niche : "",
+    platforms: asStringArray(row.platforms),
+    followers: asNumber(row.followers, 0),
+    impressions: asNumber(row.impressions, 0),
+    rate: asNumber(row.rate, 0),
+    location: typeof row.location === "string" ? row.location : "",
+    available: row.available !== false,
+    avatar: typeof row.avatar === "string" ? row.avatar : undefined,
+    portfolio: asStringArray(row.portfolio),
+  };
+}
+
+export async function requestCreatorVerification(): Promise<{ error?: string }> {
+  const auth = await requireAuthenticatedUser();
+  if (auth.error) return { error: publicErrorMessage(auth.error, "Could not request verification.") };
+  if (auth.skipped || !auth.supabase || !auth.user) return { error: "Sign in to request verification." };
+  const { error } = await auth.supabase.rpc("request_creator_verification");
+  if (error) return { error: publicErrorMessage(error, "Could not request verification.") };
+  return {};
+}
+
+export async function listCreatorVerificationQueue(
+  filter: "pending" | "reviewed" | "all" = "pending",
+): Promise<{ items: CreatorVerificationQueueItem[]; error?: string; skipped?: boolean }> {
+  const auth = await requireAuthenticatedUser();
+  if (auth.error) return { items: [], error: publicErrorMessage(auth.error, "Could not load creator verification.") };
+  if (auth.skipped || !auth.supabase || !auth.user) return { items: [], skipped: true };
+  const { data, error } = await auth.supabase.rpc("list_creator_verification_queue", { p_filter: filter });
+  if (error && isMissingRelation(error)) return { items: [], skipped: true };
+  if (error) return { items: [], error: publicErrorMessage(error, "Could not load creator verification.") };
+  const rows = Array.isArray(data) ? data : [];
+  return {
+    items: rows
+      .map((row) => (row && typeof row === "object" ? rowToCreatorVerificationItem(row as Record<string, unknown>) : null))
+      .filter((item): item is CreatorVerificationQueueItem => !!item),
+  };
+}
+
+export async function adminApproveCreatorVerification(creatorId: string): Promise<{ error?: string }> {
+  const auth = await requireAuthenticatedUser();
+  if (auth.error) return { error: publicErrorMessage(auth.error, "Could not approve this creator.") };
+  if (auth.skipped || !auth.supabase || !auth.user) return { error: "Sign in to review verification." };
+  const { error } = await auth.supabase.rpc("admin_approve_creator_verification", { p_creator_id: creatorId });
+  if (error) return { error: publicErrorMessage(error, "Could not approve this creator.") };
+  return {};
+}
+
+export async function adminRejectCreatorVerification(creatorId: string, reason: string): Promise<{ error?: string }> {
+  const auth = await requireAuthenticatedUser();
+  if (auth.error) return { error: publicErrorMessage(auth.error, "Could not reject this creator.") };
+  if (auth.skipped || !auth.supabase || !auth.user) return { error: "Sign in to review verification." };
+  const { error } = await auth.supabase.rpc("admin_reject_creator_verification", {
+    p_creator_id: creatorId,
+    p_reason: reason.trim(),
+  });
+  if (error) return { error: publicErrorMessage(error, "Could not reject this creator.") };
+  return {};
+}
+
 export type AdminOverview = {
   pendingReviews: number;
   openDisputes: number;
@@ -1703,15 +1936,11 @@ export async function hydrateMarketplace(state: State): Promise<State> {
   if (!convos.skipped && !convos.error) next.conversations = convos.conversations;
   if (!notes.skipped && !notes.error) next.notifications = notes.notifications;
   if (!dealRows.skipped && !dealRows.error) next.workspaceDeals = dealRows.deals;
-  if (state.role === "brand") {
-    if (brandCanBrowseCreators(state.role, state.campaigns)) {
-      const directory = await listPublicCreators();
-      if (directory.error) toast.error(directory.error);
-      next.directoryCreators = directory.error || directory.gated || directory.skipped ? [] : realDirectoryCreators(directory.creators);
-    } else {
-      next.directoryCreators = [];
-    }
-  }
+  const [creators, brands] = await Promise.all([listPublicCreators(), listPublicBrands()]);
+  if (creators.error) toast.error(creators.error);
+  else if (!creators.skipped) next.directoryCreators = realDirectoryCreators(creators.creators);
+  if (brands.error) toast.error(brands.error);
+  else if (!brands.skipped) next.directoryBrands = brands.brands.filter((item) => isUuid(item.id));
   return next;
 }
 
@@ -1730,7 +1959,7 @@ type ConversationRow = {
   connection_id: string;
   brand_id: string;
   creator_id: string;
-  campaign_id: string;
+  campaign_id: string | null;
   campaign_title: string;
   campaign_brand: string;
   campaign_color: string;
@@ -1783,7 +2012,10 @@ function asNotificationType(value: unknown): NotificationType | undefined {
     value === "deal_platform_revision" ||
     value === "deal_needs_verification" ||
     value === "deal_disputed" ||
-    value === "deal_dispute_resolved"
+    value === "deal_dispute_resolved" ||
+    value === "creator_verification_requested" ||
+    value === "creator_verification_approved" ||
+    value === "creator_verification_rejected"
     ? value
     : undefined;
 }
@@ -1803,7 +2035,7 @@ function rowToConversation(row: ConversationRow, userId: string, unreadCount = 0
   return {
     id: row.id,
     connectionId: row.connection_id,
-    campaignId: row.campaign_id,
+    campaignId: row.campaign_id || "",
     brandId: row.brand_id,
     creatorId: row.creator_id,
     campaignTitle: row.campaign_title || "",
@@ -2199,6 +2431,17 @@ export type AttentionBidResult = {
 const ATTENTION_PRODUCT_COLUMNS =
   "id, owner_id, brand_name, name, slug, logo, color, website_url, description, category, tags, status, listing_starts_at, listing_ends_at, current_bid, click_count, campaign_title, campaign_description, campaign_requirements, campaign_budget, created_at";
 
+/** Identified 2026-09 demo listings. Not a seed — used only to ignore those rows if they remain in Supabase. */
+const DEMO_ATTENTION_PRODUCT_IDS = new Set([
+  "1247c322-2965-484e-987f-00029144e0af",
+  "5420e773-585d-4628-bd6f-2c503d0148f8",
+  "f935c0f6-d49e-4757-a4b9-1158407f21ab",
+]);
+
+function isDemoAttentionProductId(id: string) {
+  return DEMO_ATTENTION_PRODUCT_IDS.has(id);
+}
+
 function asEpoch(value: string | null | undefined) {
   if (!value) return 0;
   const n = Date.parse(value);
@@ -2237,7 +2480,7 @@ function attentionErrorMessage(error: unknown, fallback: string) {
   if (raw.includes("expired and cannot receive")) return "This listing has expired and cannot receive bids.";
   if (raw.includes("valid bid amount")) return "Enter a valid bid amount.";
   if (raw.includes("whole-dollar")) return "Use a whole-dollar amount.";
-  if (raw.includes("Initial bid must")) return "Initial bid must be a whole dollar between $1 and $100,000.";
+  if (raw.includes("Initial bid must")) return "Initial bid must be a whole dollar between $2 and $100,000.";
   if (raw.includes("$100,000")) return "Demo bids must be $100,000 or less.";
   if (raw.includes("creator opportunity")) return "Complete the optional creator opportunity, including its budget.";
   if (raw.includes("product name, description") || raw.includes("valid website")) return "Add a product name, description, category, and valid website.";
@@ -2342,7 +2585,7 @@ export async function loadAttentionMarketplace(): Promise<{
       error: isMissingRelation(productError) ? undefined : attentionClientError(productError, "Could not load the marketplace."),
     };
   }
-  const productRows = (productData || []).filter(isAttentionProductRow);
+  const productRows = (productData || []).filter(isAttentionProductRow).filter((row) => !isDemoAttentionProductId(row.id));
   const productIds = productRows.map((row) => row.id);
   const [{ data: bidData, error: bidError }, { data: activityData, error: activityError }] = await Promise.all([
     productIds.length
@@ -2363,7 +2606,10 @@ export async function loadAttentionMarketplace(): Promise<{
     list.push(rowToBid(row));
     bidsByProduct.set(row.product_id, list);
   }
-  const activity = ((activityData || []) as AttentionActivityRow[]).map(rowToActivity).filter((event): event is ActivityEvent => !!event);
+  const liveProductIds = new Set(productIds);
+  const activity = ((activityData || []) as AttentionActivityRow[])
+    .map(rowToActivity)
+    .filter((event): event is ActivityEvent => !!event && liveProductIds.has(event.productId));
   const visitTimes = new Map<string, number[]>();
   for (const event of activity) {
     if (event.type !== "visit") continue;

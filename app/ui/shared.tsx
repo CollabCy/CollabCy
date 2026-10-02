@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import Link from 'next/link';
+import Link from './app-link';
 import {ArrowUpRight,ArrowRight,Orbit,Layers,Command,Zap,Code2,Search,Check,Inbox,Camera,Star} from 'lucide-react';
 import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from '@/components/ui/select';
 import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/ui/dialog';
@@ -23,7 +23,7 @@ export function Mark({c,size=''}:{c:Campaign;size?:string}){const I=icons[c.lett
 export function Avatar({name,color='#e8eeff',image,size=''}:{name:string;color?:string;image?:string;size?:string}){return <span className={`avatar ${size}`} style={{background:color}}>{image?<img src={image} alt="Profile" referrerPolicy="no-referrer"/>:name.split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase()||'Y'}</span>}
 export function Platform({name}:{name:string}){return <span className="platform">{name==='Instagram'?<Instagram size={14}/>:name==='Facebook'?<Facebook size={14}/>:<span className="x-logo">𝕏</span>}{name==='X'?'X / Twitter':name}</span>}
 export function Rating({value,count}:{value:number;count?:number}){return <span className="rating"><Star size={14} fill="currentColor"/>{value.toFixed(1)}{count!==undefined&&<small>({count})</small>}</span>}
-export const statusLabels:Record<string,string>={pending:'Pending request',negotiating:'In negotiation','awaiting-funds':'Awaiting payment','in-progress':'In progress','in-review':'In review',revision:'Changes requested',completed:'Completed',declined:'Declined',disputed:'Disputed',active:'Active',draft:'Draft',paused:'Paused',expired:'Expired',accepted:'Accepted',rejected:'Declined',withdrawn:'Withdrawn',closed:'Closed',submitted:'Submitted',revision_requested:'Revision requested',cancelled:'Cancelled',brand_verified:'Brand verified',platform_review:'CollabCy review'};
+export const statusLabels:Record<string,string>={pending:'Pending request',negotiating:'In negotiation','awaiting-funds':'Awaiting payment','in-progress':'In progress','in-review':'In review',revision:'Changes requested',completed:'Completed',declined:'Declined',disputed:'Disputed',active:'Active',draft:'Draft',paused:'Paused',expired:'Expired',accepted:'Accepted',rejected:'Declined',withdrawn:'Withdrawn',closed:'Closed',submitted:'Submitted',revision_requested:'Revision requested',cancelled:'Cancelled',brand_verified:'Brand verified',platform_review:'CollabCy review',approved:'Verified',not_requested:'Not requested'};
 export function Status({status}:{status:string}){return <span className={`status status-${status}`}>{statusLabels[status]||status}</span>}
 export function DemoNote({children}:{children?:React.ReactNode}){return <div className="demo-note"><span className="tiny-dot"/>{children||'Frontend preview · Sample data · No real payments or messages are sent.'}</div>}
 export function MoneyRange({c}:{c:Campaign}){return <div className="money-range"><strong>{money(c.budget)}–{money(c.maxBudget)}</strong><small>per collaboration</small></div>}

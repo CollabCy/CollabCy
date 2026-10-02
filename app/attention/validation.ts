@@ -1,4 +1,4 @@
-import {attentionCategories,safeWebsite} from './model';
+import {attentionCategories,MAX_INITIAL_BID,MIN_INITIAL_BID,safeWebsite} from './model';
 
 export const ATTENTION_PRODUCT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -28,8 +28,8 @@ export function validateAttentionListing(input: {
   if (!name || name.length > 80 || !description || description.length > 500 || !attentionCategories.includes(input.category) || !safeWebsite(input.websiteUrl)) {
     return 'Add a product name, description, category, and valid website.';
   }
-  if (!Number.isInteger(input.initialBid) || input.initialBid < 1 || input.initialBid > 100000) {
-    return 'Initial bid must be a whole dollar between $1 and $100,000.';
+  if (!Number.isInteger(input.initialBid) || input.initialBid < MIN_INITIAL_BID || input.initialBid > MAX_INITIAL_BID) {
+    return `Initial bid must be a whole dollar between $${MIN_INITIAL_BID} and $${MAX_INITIAL_BID.toLocaleString('en-US')}.`;
   }
   if (input.brandName && input.brandName.trim().length > 80) {
     return 'Add a product name, description, category, and valid website.';

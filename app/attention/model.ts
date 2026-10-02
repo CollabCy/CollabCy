@@ -8,6 +8,8 @@ export type MarketplaceState = {version:1;products:Product[];activity:ActivityEv
 export type MarketplaceStats = {activeProducts:number;visitsToday:number;weeklyBids:number};
 export const LISTING_FEE=10;
 export const LISTING_DAYS=7;
+export const MIN_INITIAL_BID=2;
+export const MAX_INITIAL_BID=100000;
 export function isActive(p:Product, now=Date.now()){return p.status==='active'&&p.listingStartsAt<=now&&p.listingEndsAt>now;}
 export function getRankedProducts(products:Product[],now=Date.now()){return products.filter(p=>isActive(p,now)).slice().sort((a,b)=>b.currentBid-a.currentBid||(a.bids[0]?.createdAt??a.listingStartsAt)-(b.bids[0]?.createdAt??b.listingStartsAt)||a.id.localeCompare(b.id));}
 export function getMinimumBidForPosition(products:Product[],productId:string,now=Date.now()){const ranked=getRankedProducts(products,now);const i=ranked.findIndex(p=>p.id===productId);if(i<0)return null;const current=ranked[i].currentBid;const nextHigher=i>0?ranked[i-1].currentBid:current;return nextHigher-current+1;}

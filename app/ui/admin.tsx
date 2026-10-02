@@ -1,10 +1,10 @@
 'use client';
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useRef,useState,type FormEvent} from 'react';
 import {usePathname} from 'next/navigation';
 import {Activity,ArrowLeft,ArrowRight,ArrowUpRight,Building2,Flag,Handshake,Inbox,LayoutDashboard,LogOut,MessageSquare,Send,Settings as SettingsIcon,ShieldCheck,ClipboardList,Users} from 'lucide-react';
 import {toast} from 'sonner';
 import {useStore} from '../store';
-import {ChatMessage,money} from '../data';
+import {ChatMessage,money,compact} from '../data';
 import {type DealVerificationEvent} from '../deals/model';
 import {Avatar,Button,Empty,Field,Modal,PageTitle,Status,Textarea} from './shared';
 import {Sidebar,SidebarProvider,SidebarHeader,SidebarContent,SidebarFooter,SidebarMenu,SidebarMenuItem,SidebarMenuButton,SidebarTrigger,useSidebar} from '@/components/ui/sidebar';
@@ -13,6 +13,7 @@ import {
   listAdminActivity,
   listAdminConversations,
   listAdminOverview,
+  listCreatorVerificationQueue,
   listDealEvents,
   listMessages,
   listVerificationQueue,
@@ -24,9 +25,12 @@ import {
   sendPlatformMessage,
   subscribeToConversationMessages,
   verifyDealPlatform,
+  adminApproveCreatorVerification,
+  adminRejectCreatorVerification,
   type AdminActivityItem,
   type AdminConversation,
   type AdminOverview,
+  type CreatorVerificationQueueItem,
   type VerificationQueueItem,
 } from '@/lib/supabase';
 
@@ -38,7 +42,7 @@ const NAV:[string,string,typeof LayoutDashboard,boolean?][]=[
   ['messages','Messages',MessageSquare],
   ['activity','Audit log',Activity],
   ['users','Users',Users,true],
-  ['creators','Creators',Users,true],
+  ['creators','Creator Verification',Users],
   ['brands','Brands',Building2,true],
   ['settings','Settings',SettingsIcon],
 ];
@@ -89,8 +93,8 @@ export function AdminWorkspace(){
     case 'messages':content=<AdminMessages/>;break;
     case 'activity':content=<AdminActivity/>;break;
     case 'users':
-    case 'creators':
     case 'brands':content=<Empty title="Not available yet." description="A live user directory is not part of this phase."/>;break;
+    case 'creators':content=<AdminCreatorVerification/>;break;
     case 'settings':content=<AdminSettings/>;break;
     default:content=<AdminOverviewPage/>;
   }
@@ -494,5 +498,92 @@ function AdminSettings(){
         <Button variant="ghost" onClick={()=>signOut()}>Sign out</Button>
       </div>
     </section>
+  </>;
+}
+
+function AdminCreatorVerification(){
+  const {s}=useStore();
+  const [tab,setTab]=useState<'pending'|'reviewed'|'all'>('pending');
+  const [items,setItems]=useState<CreatorVerificationQueueItem[]>([]);
+  const [loading,setLoading]=useState(true);
+  const [current,setCurrent]=useState<CreatorVerificationQueueItem|null>(null);
+  const [reason,setReason]=useState('');
+  const [acting,setActing]=useState(false);
+  async function refresh(filter=tab){
+    const result=await listCreatorVerificationQueue(filter);
+    setLoading(false);
+    if(result.skipped)return;
+    if(result.error){toast.error(result.error);return}
+    setItems(result.items);
+  }
+  useEffect(()=>{
+    if(!persistMarketplace(s)||!s.platformVerifier)return;
+    setLoading(true);
+    void refresh(tab);
+  },[tab,s.platformVerifier,s.remoteWorkspace]);
+  async function approve(item:CreatorVerificationQueueItem){
+    setActing(true);
+    const result=await adminApproveCreatorVerification(item.creatorId);
+    setActing(false);
+    if(result.error){toast.error(result.error);return}
+    toast.success('Creator verified.');
+    await refresh();
+  }
+  async function reject(e:FormEvent){
+    e.preventDefault();
+    if(!current)return;
+    setActing(true);
+    const result=await adminRejectCreatorVerification(current.creatorId,reason);
+    setActing(false);
+    if(result.error){toast.error(result.error);return}
+    setCurrent(null);setReason('');
+    toast.success('Verification rejected.');
+    await refresh();
+  }
+  return <>
+    <PageTitle eyebrow="CREATOR VERIFICATION" title="Creator verification queue" description="Only platform verifiers can approve or reject. Approved creators become publicly visible."/>
+    <div className="list-toolbar admin-tabs">
+      {([['pending','Pending'],['reviewed','Reviewed'],['all','All']] as const).map(([value,label])=>(
+        <button key={value} className={tab===value?'active':''} onClick={()=>setTab(value)}>{label}</button>
+      ))}
+    </div>
+    {loading?<Empty title="Loading creator requests." description="Checking verification submissions."/>:items.length?<div className="admin-queue">{items.map(item=>(
+      <article className="admin-queue-card panel" key={item.id}>
+        <div className="admin-queue-meta">
+          <Status status={item.status}/>
+          <span>{formatStamp(item.submittedAt)}</span>
+        </div>
+        <div className="application-review-head">
+          <Avatar name={item.name} image={item.avatar} size="lg"/>
+          <div>
+            <h3>{item.name||'Creator'}</h3>
+            <p>{[item.handle,item.niche,item.location].filter(Boolean).join(' · ')||'Creator profile'}</p>
+          </div>
+        </div>
+        <p>{item.bio||'No bio provided.'}</p>
+        <div className="creator-stats">
+          <div><strong>{item.followers?compact(item.followers):'—'}</strong><small>Followers</small></div>
+          <div><strong>{item.impressions?compact(item.impressions):'—'}</strong><small>Impressions</small></div>
+          <div><strong>{item.rate?money(item.rate):'—'}</strong><small>Starting rate</small></div>
+        </div>
+        {item.website?<p>Website: {item.website}</p>:null}
+        {item.platforms.length?<p>Platforms: {item.platforms.join(', ')}</p>:null}
+        {(item.portfolio||[]).length?<ul>{item.portfolio.map(url=><li key={url}>{url}</li>)}</ul>:null}
+        {item.rejectionReason?<p className="preserve-lines">Rejection reason: {item.rejectionReason}</p>:null}
+        {item.status==='pending'&&<div className="action-row">
+          <Button disabled={acting} onClick={()=>void approve(item)}>Approve</Button>
+          <Button variant="secondary" disabled={acting} onClick={()=>{setCurrent(item);setReason('')}}>Reject</Button>
+        </div>}
+      </article>
+    ))}</div>:<Empty title={tab==='pending'?'No pending creator verification requests.':'No creator verification history yet.'} description="Creators who request verification appear here."/>}
+    <Modal open={!!current} onClose={()=>setCurrent(null)} title={`Reject ${current?.name||'this creator'}?`} description="A meaningful reason is required. The creator stays hidden from the public directory.">
+      <form onSubmit={reject}>
+        <Textarea label="Rejection reason" required minLength={8} maxLength={1000} rows={5} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Explain what needs to change before they can be verified…"/>
+        <div className="form-footer">
+          <Button type="button" variant="secondary" disabled={acting} onClick={()=>setCurrent(null)}>Cancel</Button>
+          <Button type="submit" disabled={acting||reason.trim().length<8}>{acting?'Rejecting…':'Reject'}</Button>
+        </div>
+      </form>
+    </Modal>
   </>;
 }

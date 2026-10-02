@@ -28,9 +28,9 @@ const main=()=>{
   assert.equal(canonicalMarketplaceRole([]),null);
   assert.equal(canonicalMarketplaceRole([{role:'creator',created:20},{role:'brand',created:10}]),'brand');
   assert.equal(canonicalMarketplaceRole([{role:'brand',created:20},{role:'creator',created:5}]),'creator');
-  assert.equal(brandCanBrowseCreators('brand',[]),false);
+  assert.equal(brandCanBrowseCreators('brand',[]),true);
   assert.equal(brandCanBrowseCreators('brand',[{id:'one'}]),true);
-  assert.equal(brandCanBrowseCreators('creator',[{id:'one'}]),false);
+  assert.equal(brandCanBrowseCreators('creator',[{id:'one'}]),true);
 
   const migration=read('supabase/migrations/20260921260000_marketplace_role_separation.sql');
   assert.match(migration,/prevent_second_marketplace_role/);
@@ -58,7 +58,8 @@ const main=()=>{
   assert.match(client,/existing && existing !== role/);
   assert.match(client,/resolvedRole = canonical \|\| role/);
   assert.match(client,/already registered as a brand/);
-  assert.match(client,/Brand to Brand connections are not allowed/);
+  assert.match(client,/create_network_connection/);
+  assert.doesNotMatch(client,/Brand to Brand connections are not allowed/);
   assert.match(client,/profiles: \{ \[role\]: profile \}/);
   assert.doesNotMatch(client,/maybeMigrateLocalProfile/);
   assert.match(client,/onConflict: "user_id,role"/);
@@ -81,7 +82,7 @@ const main=()=>{
   assert.match(auth,/One email can be a Brand or a Creator, not both/);
   assert.match(auth,/if\(error\)return/);
   assert.match(auth,/persistAuthenticatedProfile\(s\.role,profile\)/);
-  assert.match(auth,/saveOAuthIntent\(\{role,next:params.get\('next'\)\}\)/);
+  assert.match(auth,/saveOAuthIntent\(\{role,next:sanitizeNextParam\(params.get\('next'\)\)\}\)/);
 
   const connectionsRpc=read('supabase/migrations/20260922120000_connections_rpc_only.sql');
   assert.match(connectionsRpc,/revoke insert on table public\.connections/);
@@ -95,7 +96,7 @@ const main=()=>{
   assert.doesNotMatch(settings,/setRole\(/);
   assert.doesNotMatch(settings,/startDemo/);
 
-  console.log('PASS: one auth identity maps to one marketplace role; Brand↔Creator only is enforced in SQL, RPCs, and auth UX.');
+  console.log('PASS: one auth identity maps to one marketplace role; historical Brand↔Creator SQL remains in place; same-role networking is added in a later migration; RPC-only inserts stay enforced.');
 };
 
 try{main()}finally{rmSync(out,{recursive:true,force:true})}

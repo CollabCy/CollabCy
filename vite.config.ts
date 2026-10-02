@@ -1,6 +1,6 @@
 import vinext from "vinext";
 import { nitro } from "nitro/vite";
-import { defineConfig, type ResolvedConfig } from "vite";
+import { defineConfig, type Plugin, type PluginOption, type ResolvedConfig, type ViteDevServer } from "vite";
 import { fileURLToPath } from "node:url";
 import { readExecutionProfile } from "./scripts/execution-profile.mjs";
 import { sites } from "./build/sites-vite-plugin";
@@ -9,6 +9,31 @@ import { sites } from "./build/sites-vite-plugin";
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const managedLinux = readExecutionProfile() === "managed-linux";
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
+
+/**
+ * nitro() auto-detects the vinext `rsc` environment as a service and replaces
+ * it with FetchableDevEnvironment, which has no `.runner`.
+ * @vitejs/plugin-rsc's default dev HTTP handler still does
+ * `environment.runner.import(...)` and throws
+ * "Cannot read properties of undefined (reading 'import')" on full-page
+ * requests such as the X OAuth return to /onboarding.
+ * Keep vinext's auto-registered rsc plugin (HMR + module runner global);
+ * drop only that HTTP middleware. Nitro already serves the app.
+ */
+function skipPluginRscHttpHandler(option: PluginOption): PluginOption {
+  if (Array.isArray(option)) return option.map(skipPluginRscHttpHandler);
+  if (option && typeof option === "object" && "then" in option) {
+    return Promise.resolve(option).then(skipPluginRscHttpHandler);
+  }
+  const plugin = option as Plugin | false | null | undefined;
+  if (!plugin || typeof plugin !== "object" || plugin.name !== "rsc") return option;
+  const original = plugin.configureServer;
+  if (typeof original !== "function") return option;
+  plugin.configureServer = (server: ViteDevServer) => {
+    (original as unknown as (server: ViteDevServer) => void)(server);
+  };
+  return option;
+}
 
 const VINEXT_NAVIGATION_CHUNK_GROUP = {
   name: "vinext-navigation",
@@ -125,7 +150,7 @@ export default defineConfig({
     ...(isCodexSeatbeltSandbox ? { watch: { useFsEvents: false, usePolling: true } } : {}),
   },
   plugins: [
-    vinext(),
+    skipPluginRscHttpHandler(vinext()),
     sites({ mockAuth: !managedLinux }),
     nitro(),
     preserveVinextNavigationExports,

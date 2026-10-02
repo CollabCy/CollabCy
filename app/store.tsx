@@ -4,6 +4,7 @@ import {useRouter} from 'next/navigation';
 import {toast} from 'sonner';
 import {State,Role,Profile,Deal,initialState} from './data';
 import {clearOAuthIntent,getSupabase,identityFromSupabaseUser,listMyConversations,persistAuthenticatedProfile,persistMarketplace,postAuthPath,readOAuthIntent,resolveAuthenticatedState,subscribeToInbox,subscribeToMyDeals,syncMySocialAccounts} from '@/lib/supabase';
+import {toInAppPath} from '@/lib/app-origin';
 import type {User} from '@supabase/supabase-js';
 const KEY='gohighnet-frontend-v2';
 type ProviderIdentity={name:string;email:string;avatar?:string};
@@ -76,7 +77,7 @@ useEffect(()=>{let cancelled=false;(async()=>{
     if(!cancelled&&data.session?.user){
       const intent=readOAuthIntent();
       next=await hydrateFromUser(data.session.user,intent?.role||'creator');
-      if(intent){dest=postAuthPath(next.role,next.onboarded,intent.next,next.platformVerifier);clearOAuthIntent();}
+  if(intent){dest=postAuthPath(next.role,next.onboarded,intent.next,next.platformVerifier);clearOAuthIntent();}
     }else if(!cancelled){
       const store=readDeviceStore();
       writeDeviceStore({version:3,userId:null,prefs:store.prefs});
@@ -88,7 +89,7 @@ useEffect(()=>{let cancelled=false;(async()=>{
     next=initialState();
   }
   if(hasOAuthCallbackParams())window.history.replaceState({},'',window.location.pathname);
-  if(!cancelled){setS(next);setReady(true);if(dest){router.push(dest);window.scrollTo({top:0,behavior:'instant'});}}
+  if(!cancelled){setS(next);setReady(true);if(dest){router.push(toInAppPath(dest));window.scrollTo({top:0,behavior:'instant'});}}
 })();return()=>{cancelled=true}},[]);
 useEffect(()=>{if(ready)persistDevicePrefs(s)},[ready,s.authUserId,s.session,s.saved,s.shortlist,s.notifyEmail,s.notifyBrowser]);
 useEffect(()=>{if(!ready)return;const supabase=getSupabase();if(!supabase)return;const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
@@ -103,7 +104,7 @@ useEffect(()=>{if(!ready)return;const supabase=getSupabase();if(!supabase)return
     const dest=intent?postAuthPath(next.role,next.onboarded,intent.next,next.platformVerifier):null;
     if(intent)clearOAuthIntent();
     setS(next);
-    if(dest)queueMicrotask(()=>{router.push(dest);window.scrollTo({top:0,behavior:'instant'})});
+    if(dest)queueMicrotask(()=>{router.push(toInAppPath(dest));window.scrollTo({top:0,behavior:'instant'})});
   })();
 });return()=>subscription.unsubscribe()},[ready,router]);
 useEffect(()=>{if(!ready||!persistMarketplace(s)||!s.authUserId)return;const supabase=getSupabase();if(!supabase)return;let cancelled=false;let unsubscribe=()=>{};void (async()=>{
@@ -112,7 +113,7 @@ useEffect(()=>{if(!ready||!persistMarketplace(s)||!s.authUserId)return;const sup
   const stopDeals=subscribeToMyDeals(userId,deal=>{setS(p=>{if(!persistMarketplace(p)||p.authUserId!==userId)return p;const exists=p.workspaceDeals.some(item=>item.id===deal.id);return{...p,workspaceDeals:exists?p.workspaceDeals.map(item=>item.id===deal.id?deal:item):[deal,...p.workspaceDeals]}})});
   unsubscribe=()=>{stopInbox();stopDeals()};if(cancelled)unsubscribe();
 })();return()=>{cancelled=true;unsubscribe()}},[ready,s.remoteWorkspace,s.session,s.authUserId]);
-const update=(fn:(s:State)=>State)=>setS(fn);const go=(path:string)=>{router.push(path);window.scrollTo({top:0,behavior:'instant'})};
+const update=(fn:(s:State)=>State)=>setS(fn);const go=(path:string)=>{router.push(toInAppPath(path));window.scrollTo({top:0,behavior:'instant'})};
 const signInFromProvider=(role:Role,_identity:ProviderIdentity,next?:string|null)=>{void (async()=>{
   const supabase=getSupabase();
   const {data}=await supabase?.auth.getSession()||{data:{session:null}};
@@ -125,7 +126,7 @@ const signInFromProvider=(role:Role,_identity:ProviderIdentity,next?:string|null
 const signOut=()=>{clearLocalSession();void getSupabase()?.auth.signOut();go('/login')};
 const notice=(title:string,body:string)=>setS(p=>({...p,notifications:[{id:crypto.randomUUID(),title,body,date:new Date().toISOString(),read:false},...p.notifications]}));
 const setDeals=(fn:(d:Deal[])=>Deal[])=>setS(p=>p.role==='creator'?{...p,deals:fn(p.deals)}:{...p,brandDeals:fn(p.brandDeals)});
-const saveProfile=async(profile:Profile)=>{const role=s.role;if(!s.session||!s.remoteWorkspace){toast.error('Sign in to save your profile.');return false}const error=await persistAuthenticatedProfile(role,profile);if(error)return false;let socialAccounts=stateRef.current.socialAccounts;if(role==='creator'){const synced=await syncMySocialAccounts(profile);if(synced.error)toast.error(synced.error);else if(!synced.skipped)socialAccounts=synced.accounts}setS(p=>({...p,profile,profiles:{...p.profiles,[role]:profile},socialAccounts}));return true};
+const saveProfile=async(profile:Profile)=>{const role=s.role;if(!s.session||!s.remoteWorkspace){toast.error('Sign in to save your profile.');return false}const error=await persistAuthenticatedProfile(role,profile);if(error)return false;let socialAccounts=stateRef.current.socialAccounts;if(role==='creator'){const synced=await syncMySocialAccounts(profile);if(synced.error)toast.error(synced.error);else if(!synced.skipped)socialAccounts=synced.accounts}setS(p=>({...p,profile:{...profile,verificationStatus:p.profile.verificationStatus,verificationRejectionReason:p.profile.verificationRejectionReason},profiles:{...p.profiles,[role]:{...profile,verificationStatus:p.profile.verificationStatus,verificationRejectionReason:p.profile.verificationRejectionReason}},socialAccounts}));return true};
 const reset=()=>{localStorage.removeItem(KEY);setS(initialState());void getSupabase()?.auth.signOut();go('/')};
 return <Context.Provider value={{s,ready,update,go,notice,deals:s.role==='creator'?s.deals:s.brandDeals,setDeals,saveProfile,signInFromProvider,signOut,reset}}>{children}</Context.Provider>}
 export const useStore=()=>useContext(Context);

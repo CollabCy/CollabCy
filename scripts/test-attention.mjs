@@ -47,6 +47,8 @@ const main=async()=>{
  assert.equal(v.validateAttentionIncrement(4.5),'Use a whole-dollar amount.');
  assert.equal(v.validateAttentionIncrement(5),'');
  assert.ok(v.validateAttentionListing({name:'X',websiteUrl:'javascript:alert(1)',description:'A product.',category:'SaaS',initialBid:10}));
+ assert.ok(v.validateAttentionListing({name:'X',websiteUrl:'https://example.com',description:'A product.',category:'SaaS',initialBid:1}));
+ assert.equal(v.validateAttentionListing({name:'X',websiteUrl:'https://example.com',description:'A product.',category:'SaaS',initialBid:2}),'');
  assert.equal(v.validateAttentionListing({name:'X',websiteUrl:'https://example.com',description:'A product.',category:'SaaS',initialBid:10}),'');
 
  const noSeed=names=>assert.ok(names.every(name=>!DEMO_NAMES.includes(name)),`demo product leaked: ${names.join(',')}`);
