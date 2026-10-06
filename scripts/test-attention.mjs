@@ -29,7 +29,11 @@ const main=async()=>{
  const products=[high,low,finance,stale,expired];
  assert.equal(m.getRankedProducts(products,now).length,4);
  assert.equal(m.getRankedProducts(products,now)[0].name,'High');
- assert.equal(m.getFilteredProducts(products,{query:'',category:'All',time:'48h'},now).length,3);
+ assert.equal(m.getFilteredProducts(products,{query:'',category:'All',time:'30d'},now).length,4);
+ const monthEdge=product({id:'month-edge',listingStartsAt:now-30*86400000,lastBidAt:now-30*86400000});
+ const older=product({id:'older',listingStartsAt:now-31*86400000,lastBidAt:now-31*86400000});
+ const recentlyRaised=product({id:'recently-raised',listingStartsAt:now-31*86400000,lastBidAt:now-86400000});
+ assert.deepEqual(m.getFilteredProducts([monthEdge,older,recentlyRaised],{query:'',category:'All',time:'30d'},now).map(p=>p.id),['month-edge','recently-raised']);
  assert.equal(m.getFilteredProducts(products,{query:'finance',category:'All',time:'all'},now)[0].name,'Ledger');
  assert.equal(m.getFilteredProducts(products,{query:'unfindable',category:'All',time:'all'},now).length,0);
  assert.ok(m.getFilteredProducts(products,{query:'',category:'AI Tools',time:'all'},now).every(p=>p.category==='AI Tools'||p.tags.includes('AI Tools')));
@@ -57,7 +61,7 @@ const main=async()=>{
  assert.equal(pay.parseCheckoutBody({product_id:'11111111-1111-4111-8111-111111111111',increment:5,user_id:'x'}).error,'Enter a valid bid amount.');
  assert.equal(pay.parseCheckoutBody({product_id:'11111111-1111-4111-8111-111111111111',increment:1}).error,'Enter at least $2.');
  assert.ok(pay.browserReturnDoesNotApplyBid('1'));
- assert.equal(pay.checkoutReturnPath('fjrsj'),'/discover/product/fjrsj?paid=1');
+ assert.equal(pay.checkoutReturnPath('fjrsj'),'/brands/product/fjrsj?paid=1');
  assert.match(pay.bidLoginPath('fjrsj',5),/^\/login\/5221\?next=/);
  assert.ok(!pay.bidLoginPath('fjrsj',5).startsWith('/login?'));
  assert.equal(pay.isPaymentSucceededEvent('payment.succeeded'),true);

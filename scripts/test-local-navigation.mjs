@@ -28,7 +28,7 @@ assert.match(link,/toInAppPath\(href\)/);
 
 const publicUi=readFileSync(join(process.cwd(),'app/ui/public.tsx'),'utf8');
 assert.match(publicUi,/from '\.\/app-link'/);
-assert.match(publicUi,/href="\/login"/);
-assert.match(publicUi,/href="\/signup"/);
+assert.doesNotMatch(publicUi,/href="\/login"/);
+assert.match(publicUi,/href="\/brand\/products\/new"/);
 
 console.log('PASS: local navigation stays origin-relative; auth redirects use the current origin.');

@@ -46,7 +46,7 @@ assert.match(marketplace,/path==='\/brands'/);
 assert.match(marketplace,/login\?next=\$\{encodeURIComponent\(path\)\}/);
 assert.doesNotMatch(marketplace,/CreatorDiscovery publicView/);
 assert.doesNotMatch(marketplace,/BrandDiscovery publicView/);
-assert.match(marketplace,/if\(path==='\/discover'\)return <AttentionMarketplace\/>/);
+assert.match(marketplace,/if\(path==='\/brands'\)return <AttentionMarketplace\/>/);
 assert.match(directories,/listPublicCreators/);
 assert.match(directories,/listPublicBrands/);
 assert.match(directories,/if\(!s\.session\)return/);

@@ -1,39 +1,34 @@
 'use client';
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useRef,useState,type CSSProperties} from 'react';
 import {useSearchParams} from 'next/navigation';
 import Link from '../ui/app-link';
-import {ArrowUpRight,ArrowRight,Check,Trophy,Layers,TrendingUp,Users,MousePointer2,ChevronRight,Search,Heart,BarChart3,Crown,Sparkles} from 'lucide-react';
-import {Accordion,AccordionItem,AccordionTrigger,AccordionContent} from '@/components/ui/accordion';
+import {ArrowUpRight,ArrowRight,Check,Trophy,Layers,TrendingUp,Users,MousePointer2,ChevronRight,Search,Heart,BarChart3,Crown,Sparkles,Globe as GlobeIcon,ShieldCheck as ShieldIcon} from 'lucide-react';
 import {PublicHeader,PublicFooter} from '../ui/public';
-import {Button,SearchBox,Empty,DemoNote} from '../ui/shared';
+import {Button,SearchBox,Empty,DemoNote,Modal} from '../ui/shared';
+import {BrandProducts} from './listing';
+import {AudiencePulse,BrandClicks} from './audience';
+import {BrandLink} from './brand-link';
+import {useWebsiteVisit} from './website-visit';
+import {ShareListing} from './share';
 import {useStore} from '../store';
 import {money} from '../data';
 import {useAttention} from './store';
-import {attentionCategories,getRankedProducts,getFilteredProducts,isActive,timeAgo,websiteHost,LISTING_FEE,LISTING_DAYS,MIN_INITIAL_BID,type MarketplaceFilters,type Product} from './model';
-import {ProductLogo,LiveBadge,ActivityList,VisitDialog,BidDialog,ProductMetrics,lastBidAddOn} from './components';
-
-const faqs=[
-  ['How does ranking work?','Products with higher current bids rank higher. When bids are equal, the earlier bid keeps its position. Expired listings leave the active leaderboard. Ranking formulas are unchanged. Paid bid add-ons are applied after Dodo confirms payment in Test Mode.'],
-  ['How much does it cost to list a product?',`A ${LISTING_DAYS}-day product listing has a $${LISTING_FEE} listing fee, plus your chosen initial bid (from $${MIN_INITIAL_BID}). Brand account access is free. Listing creation remains an unpaid demo. No real money is currently charged to publish a listing.`],
-  ['Can I update my bid later?','Yes. Open a product and choose Place bid. The minimum shown is the amount needed to move above the next product, or increase the leading bid. Review your projected rank, then pay the add-on through Dodo Test Mode checkout. Rankings update after payment is confirmed.'],
-  ['What happens when a listing expires?','It leaves the active leaderboard and cannot receive new bids. Its product details and bid history remain available.'],
-  ['Do I need an account to place a bid?','Browsing, visiting a website, and listing a product do not require a CollabCy account. Placing a bid does. Sign in at the private login page, then complete Dodo Test Mode checkout. Returning from checkout is not proof of payment.'],
-  ['Can I use the marketplace only for website visits?','Yes. Attention Marketplace listings are for product discovery, visibility, and website traffic.'],
-  ['Can creators discover my product without a campaign?','Yes. Every active product is public. Visitors can explore its details and website from the leaderboard.'],
-];
+import {attentionCategories,getRankedProducts,getFilteredProducts,isActive,timeAgo,websiteHost,LISTING_DAYS,type MarketplaceFilters,type Product} from './model';
+import {ProductLogo,LiveBadge,ActivityList,BidDialog,ProductMetrics,lastBidAddOn} from './components';
 
 export function usePromote(){
   const {go}=useStore();
   return ()=>{go('/brand/products/new');};
 }
 
-export function AttentionMarketplace(){
+export function AttentionMarketplace({view='brands'}:{view?:'brands'|'listings'}){
   const {state,repository}=useAttention();
   const promote=usePromote();
   const [filters,setFilters]=useState<MarketplaceFilters>({query:'',category:'All',time:'all'});
-  const [visit,setVisit]=useState<string|null>(null);
+  const openWebsite=useWebsiteVisit();
   const [bid,setBid]=useState<string|null>(null);
   const [allActivity,setAllActivity]=useState(false);
+  const [spotlight,setSpotlight]=useState(false);
   const ranked=getRankedProducts(state.products);
   const filtered=getFilteredProducts(state.products,filters);
   const setCategory=(category:string)=>setFilters(v=>({...v,category}));
@@ -41,59 +36,62 @@ export function AttentionMarketplace(){
   const leader=ranked[0];
   return <>
     <PublicHeader/>
-    <main className="attention-page attention-editorial">
-      <section className="attention-hero">
+    <main className={`attention-page attention-editorial spotlight-page ${view==='listings'?'spotlight-listings':''}`}><div className="audience-dock public-container"><AudiencePulse/></div>
+      {view==='listings'&&<div className="listing-scene" aria-hidden="true"><div className="listing-glow glow-pink"/><div className="listing-glow glow-gold"/><Crown className="listing-sky-crown" strokeWidth={1}/><div className="listing-royal-seal"><Crown size={90} strokeWidth={1}/><span>GOOD IDEAS<br/>DESERVE A SPOTLIGHT</span><Sparkles size={30}/></div>{[0,1,2,3,4,5].map(i=><span key={i} className={`listing-confetti confetti-${i}`}>{i%2?<Sparkles size={22} strokeWidth={1}/>:<i/>}</span>)}</div>}
+      {view==='brands'&&<section className="attention-hero brands-hero-scene">
+        <div className="brands-ambient" aria-hidden="true"><span className="brands-ambient-glow"/><Crown className="brands-ambient-crown" strokeWidth={1}/><Sparkles className="brands-ambient-star"/><i/><i/></div>
         <div className="public-container">
           <div className="attention-hero-grid">
             <div className="editorial-hero-copy">
               <div className="attention-eyebrow"><LiveBadge/><span>BRANDS ARE COMPETING FOR ATTENTION</span></div>
-              <h1>ATTENTION<span>MARKETPLACE</span></h1>
-              <p>Where brands compete for attention — and creators discover their next opportunity.</p>
+              <h1>Your brand deserves<span>the spotlight.</span></h1>
+              <p>Big ideas deserve to be seen. Meet remarkable products, discover your next favorite, and put your brand in the spotlight.</p>
               <div className="hero-actions">
-                <a className="btn btn-primary" href="#products">Explore products <ArrowRight size={17}/></a>
-                <button className="btn btn-secondary" type="button" onClick={promote}>List your product <ArrowRight size={16}/></button>
+                <button className="btn btn-primary spotlight-button" type="button" onClick={()=>setSpotlight(true)}><span>Spotlight your brand</span><ArrowRight size={17}/></button>
+                <Link className="btn btn-secondary" href="/listings">View all listings <ArrowRight size={16}/></Link>
               </div>
               <div className="attention-trust">
                 <span><Search size={15}/>Product discovery</span>
-                <span><BarChart3 size={15}/>Test Mode bidding</span>
+                <span><BarChart3 size={15}/>Listings from $2</span>
                 <span><Heart size={15}/>Find your next favorite</span>
               </div>
             </div>
-            <HeroStage/>
+            <HeroStage products={ranked.slice(0,4)} loading={loading}/>
           </div>
         </div>
-      </section>
+      </section>}
       <section className="public-container attention-market" id="products" aria-label="Product marketplace">
         <div className="attention-market-grid">
           <div className="attention-board">
             <div className="attention-board-head">
               <div>
-                <span className="editorial-kicker">THE LIVE PRODUCT INDEX</span>
-                <h2>Products competing for attention<span className="editorial-period">.</span></h2>
-                <p>Real products. Real brands. Real opportunities.</p>
+                {view==='listings'?<nav className="listing-breadcrumb" aria-label="Breadcrumb"><Link href="/brands">Home</Link><span>/</span><span aria-current="page">Listings</span></nav>:<span className="editorial-kicker">THE BRAND SPOTLIGHT</span>}
+                {view==='listings'?<h1>All listings<span className="editorial-period">.</span></h1>:<h2>Who’s in the spotlight<span className="editorial-period">.</span></h2>}
+                <p>{view==='listings'?`${ranked.length} ${ranked.length===1?'product':'products'} on the board. Your next discovery starts here.`:'Independent brands. Ambitious ideas. Your next discovery.'}</p>
               </div>
+              <Button className={`spotlight-button${view==='listings'?' listing-spotlight-cta':''}`} onClick={()=>setSpotlight(true)}>{view==='listings'&&<Crown className="listing-cta-crown" size={16}/>}<span>Spotlight your brand</span><ArrowUpRight size={17}/></Button>
             </div>
             <div className="attention-toolbar">
               <div className="attention-controls">
                 <div className="attention-time" role="group" aria-label="Activity period">
                   <button aria-pressed={filters.time==='all'} onClick={()=>setFilters(v=>({...v,time:'all'}))}>All time</button>
-                  <button aria-pressed={filters.time==='48h'} onClick={()=>setFilters(v=>({...v,time:'48h'}))}>Last 48 hours</button>
+                  <button aria-pressed={filters.time==='30d'} onClick={()=>setFilters(v=>({...v,time:'30d'}))}>Last 1 month</button>
                 </div>
                 <div id="market-search"><SearchBox placeholder="Search products, brands, or categories…" value={filters.query} onChange={query=>setFilters(v=>({...v,query}))}/></div>
               </div>
               <CategoryChips value={filters.category} onChange={setCategory}/>
             </div>
             {filtered.length
-              ? <div className="attention-products" role="list">
+              ? <div className={view==='listings'?'listing-directory':'attention-products'} role="list">
                   {filtered.map(product=>{
                     const rank=ranked.findIndex(item=>item.id===product.id)+1;
-                    return <LeaderboardRow key={product.id} product={product} rank={rank} onVisit={()=>setVisit(product.id)} onBid={()=>setBid(product.id)}/>;
+                    return view==='listings'?<ListingRow key={product.id} product={product} rank={rank} onVisit={()=>openWebsite(product)} onBid={()=>setBid(product.id)}/>:<LeaderboardRow key={product.id} product={product} rank={rank} onVisit={()=>openWebsite(product)} onBid={()=>setBid(product.id)}/>;
                   })}
                 </div>
               : loading
-                ? null
+                ? view==='listings'?<div className="listing-loading" role="status" aria-label="Loading listings">{[0,1,2].map(i=><div className="listing-skeleton" key={i}><span/><div><b/><i/></div><em/></div>)}</div>:null
                 : !ranked.length
-                  ? <BoardEmpty onList={promote}/>
+                  ? view==='listings'?<ListingsEmpty onList={()=>setSpotlight(true)}/>:<BoardEmpty onList={promote}/>
                   : <div className="attention-filter-empty">
                       <span><Search size={18}/></span>
                       <div><strong>No matching products.</strong><p>Try another search or category.</p></div>
@@ -101,7 +99,7 @@ export function AttentionMarketplace(){
                     </div>}
           </div>
           <aside className="attention-sidebar">
-            <ClaimSpot leader={leader} onBid={()=>leader&&setBid(leader.id)} onList={promote}/>
+            <ClaimSpot leader={leader} onBid={()=>leader&&(leader.brandId==='demo'?setSpotlight(true):setBid(leader.id))} onList={promote}/>
             <section className="attention-side-card activity-card">
               <div className="attention-side-title">
                 <h2><i/>Live activity</h2>
@@ -133,20 +131,11 @@ export function AttentionMarketplace(){
           <Button variant="secondary" onClick={promote}>List your product <ArrowUpRight size={18}/></Button>
         </div>
       </section>
-      <section className="public-container attention-faq">
-        <div>
-          <span className="eyebrow">03 / A LITTLE MORE CLARITY</span>
-          <h2>Frequently asked questions</h2>
-          <p>Good questions. Clear answers.</p>
-          <Link href="/help" className="text-link">Visit the help center <ArrowRight size={16}/></Link>
-        </div>
-        <Accordion type="single" collapsible>
-          {faqs.map(([question,answer],index)=><AccordionItem key={question} value={String(index)}><AccordionTrigger>{question}</AccordionTrigger><AccordionContent>{answer}</AccordionContent></AccordionItem>)}
-        </Accordion>
-      </section>
+
     </main>
     <PublicFooter/>
-    <VisitDialog productId={visit} onClose={()=>setVisit(null)} onBid={id=>{setVisit(null);setBid(id);}}/>
+    <Modal open={spotlight} onClose={()=>setSpotlight(false)} title="Your next moment in the spotlight" description="Introduce your brand, review your placement, and continue to demo payment." wide><div className="spotlight-form"><BrandProducts creating onCancel={()=>setSpotlight(false)}/></div></Modal>
+
     <BidDialog productId={bid} onClose={()=>setBid(null)}/>
   </>;
 }
@@ -195,31 +184,30 @@ function Breadcrumb({name}:{name?:string}){
   return <nav className="attention-breadcrumb" aria-label="Breadcrumb">
     <Link href="/">Home</Link>
     <ChevronRight size={13}/>
-    {name?<><Link href="/discover">Discover</Link><ChevronRight size={13}/><span aria-current="page">{name}</span></>:<span aria-current="page">Discover</span>}
+    {name?<><Link href="/brands">Brands</Link><ChevronRight size={13}/><span aria-current="page">{name}</span></>:<span aria-current="page">Brands</span>}
   </nav>;
 }
 
-function HeroStage(){
-  return <div className="hero-stage" aria-hidden="true">
-    <div className="hero-stage-glow"/>
-    <div className="hero-stage-arrow"><TrendingUp size={72}/></div>
-    <div className="hero-float float-a">
-      <span className="hero-float-mark mark-x">×</span>
-      <div><b>Live ranking</b><small>Products rise as bids grow</small></div>
-      <em><Sparkles size={11}/> #3 Trending</em>
-    </div>
-    <div className="hero-float float-b">
-      <span className="hero-float-mark mark-o">○</span>
-      <div><b>Attention lead</b><small>Highest cumulative bid sits first</small></div>
-      <em><Crown size={11}/> #1 Trending</em>
-    </div>
-    <div className="hero-float float-c">
-      <span className="hero-float-mark mark-box"/>
-      <div><b>New listing</b><small>Join the live product index</small></div>
-      <em><TrendingUp size={11}/> #5 Trending</em>
-    </div>
-    <span className="hero-crown"><Crown size={18}/></span>
+function HeroStage({products,loading}:{products:Product[];loading:boolean}){
+  return <div className="spotlight-stage" aria-label="Top three brands">
+    <div className="spotlight-orbit orbit-one"/><div className="spotlight-orbit orbit-two"/>
+    <span className="spotlight-star star-one"><Sparkles/></span><span className="spotlight-star star-two"><Sparkles size={16}/></span>
+    <div className="crown-jewel"><div className="crown-jewel-inner">{products[0]&&<BrandLink brandId={products[0].id} className="brand-card-link" href={`/brands/product/${products[0].slug}`} aria-label={`Open Crown Jewel ${products[0].name}`}/>}<span className="crown-jewel-icon"><Crown size={28} strokeWidth={1.5}/></span><div><small>THE CROWN JEWEL</small><strong>{products[0]?<BrandLink brandId={products[0].id} href={`/brands/product/${products[0].slug}`}>{products[0].name}</BrandLink>:(loading?'Finding the standout…':'A place for something extraordinary.')}</strong><p>{products[0]?`${products[0].brandId==='demo'?'DEMO - ':''}${products[0].brandName} · ${money(products[0].currentBid)} leading bid`:'The brightest brand earns the crown.'}</p>{products[0]&&<BrandPageClicks product={products[0]}/>}</div>{products[0]&&<ShareListing product={products[0]}/>}</div></div>
+    <div className="spotlight-stage-label"><span/> THE ROYAL THREE</div>
+    {[0,1,2].map(index=>{const product=products[index+1];return <div key={product?.id||index} className={`royal-brand royal-brand-${index+1}`}>{product&&<BrandLink brandId={product.id} className="brand-card-link" href={`/brands/product/${product.slug}`} aria-label={`Open Royal ${index+1} ${product.name}`}/>}
+
+      <span className="royal-position">0{index+1}</span>
+      {product?<ProductLogo product={product}/>:<span className="royal-placeholder"><Crown size={22}/></span>}
+      <div className="royal-brand-copy"><small>{index===0?'FIRST IN LINE':index===1?'ON THE RISE':'ONE TO WATCH'}</small><strong>{product?.name||(loading?'Finding the leaders…':'Your brand could be here')}</strong><span>{product?`${product.brandName} · ${money(product.currentBid)} current bid`:'A little ambition. A lot of possibility.'}</span>{product&&<BrandPageClicks product={product}/>}</div>
+      {product&&<div className="royal-brand-actions"><ShareListing product={product}/><BrandLink brandId={product.id} href={`/brands/product/${product.slug}`} aria-label={`Explore ${product.name}`}><ArrowUpRight size={18}/></BrandLink></div>}
+    </div>})}
+    <div className="royal-stage-foot"><TrendingUp size={14}/>{products.every(p=>p.brandId==='demo')?'Demo brands. Real possibilities.':'Ranked live. Built to be discovered.'}</div>
   </div>;
+}
+
+export function SpotlightAbout(){
+ const promote=usePromote();
+ return <><PublicHeader/><main className="attention-editorial spotlight-page spotlight-about"><section className="public-container about-intro"><span className="editorial-kicker">A LITTLE ABOUT COLLABCY</span><h1>Great brands.<br/><span>Brighter possibilities.</span></h1><p>We believe the next great thing deserves a chance to be discovered. CollabCy brings independent brands, curious people, and ambitious creators together in one shared spotlight.</p><Link href="/listings" className="btn btn-primary spotlight-button">Find your next favorite <ArrowUpRight size={18}/></Link><div className="about-values"><article><GlobeIcon/><span>01 / DISCOVER</span><h2>Ideas worth your attention.</h2><p>Explore products across AI, design, developer tools, and beyond. Get to know the people and brands behind them.</p></article><article><Crown/><span>02 / STAND OUT</span><h2>A spotlight you can earn.</h2><p>Active products are ranked by their current bids. Higher bids move up; equal bids keep the earlier position.</p></article><article><Heart/><span>03 / CONNECT</span><h2>Your next favorite starts here.</h2><p>Visit a brand, explore its product, and discover something that fits the way you work and create.</p></article></div></section><section className="public-container about-process"><span className="editorial-kicker">YOUR BRAND’S NEXT CHAPTER</span><h2>From an idea to the spotlight.</h2><div className="about-process-steps"><p><b>01</b><strong>Introduce your brand</strong><span>Add your product name, description, website, and category.</span></p><p><b>02</b><strong>Choose your placement</strong><span>Review your initial bid, listing fee, and projected position.</span></p><p><b>03</b><strong>Make your debut</strong><span>Complete the demo checkout and join the active product board.</span></p></div><div className="about-payment-note"><ShieldIcon/><p>New listings currently use demo checkout with no real charge. Bid increases use Dodo Test Mode and update only after payment confirmation. Listings stay active for {LISTING_DAYS} days.</p></div><Button className="spotlight-button" onClick={promote}>Spotlight your brand <ArrowRight size={17}/></Button></section></main><PublicFooter/></>;
 }
 
 function ClaimSpot({leader,onBid,onList}:{leader:Product|undefined;onBid:()=>void;onList:()=>void}){
@@ -234,7 +222,7 @@ function ClaimSpot({leader,onBid,onList}:{leader:Product|undefined;onBid:()=>voi
       ? <>
           <p>Currently, the #1 product has a bid of {money(leader.currentBid)}.</p>
           <strong>Bid {money(claim)} to claim the #1 spot.</strong>
-          <Button onClick={onBid}>Place your bid <ArrowRight size={16}/></Button>
+          <Button onClick={onBid}>{leader.brandId==='demo'?'Spotlight your brand':'Place your bid'} <ArrowRight size={16}/></Button>
           <ul>
             <li><Check size={15}/> Get the #1 position on the leaderboard</li>
             <li><Check size={15}/> Increase your visibility anytime</li>
@@ -261,23 +249,27 @@ function BoardEmpty({onList}:{onList:()=>void}){
   </div>;
 }
 
+function ListingsEmpty({onList}:{onList:()=>void}){
+ return <div className="listing-empty"><span className="listing-empty-crown"><Crown size={34} strokeWidth={1.4}/><Sparkles size={16}/></span><span className="listing-empty-eyebrow">THE NEXT GREAT THING COULD BE YOURS</span><h2>A little spotlight.<br/>A world of possibility.</h2><p>The board is ready for its first brand. Introduce what you’re building and claim your place from $2.</p><Button className="spotlight-button" onClick={onList}><span>Spotlight your brand</span><ArrowUpRight size={17}/></Button><small>Seven days of discovery · Listings from $2</small></div>;
+}
+
+function ListingRow({product,rank,onVisit,onBid}:{product:Product;rank:number;onVisit:()=>void;onBid:()=>void}){
+ return <article className={`listing-row${rank===1?' listing-row-leader':''}`} role="listitem" style={{animationDelay:`${Math.min(rank-1,8)*55}ms`}}>
+  <BrandLink brandId={product.id} className="brand-card-link" href={`/brands/product/${product.slug}`} aria-label={`Open ${product.name} details`}/><span className="listing-rank" aria-label={`Rank ${rank}`}>{rank===1?<Crown size={19} strokeWidth={1.6}/>:<>#{rank-1}</>}</span>
+  <BrandLink brandId={product.id} className="listing-logo-link" href={`/brands/product/${product.slug}`} aria-label={`View ${product.name}`}><ProductLogo product={product}/></BrandLink>
+  <div className="listing-story"><div className="listing-story-title"><BrandLink brandId={product.id} href={`/brands/product/${product.slug}`}>{product.name}</BrandLink>{rank===1&&<span className="listing-leader-badge"><Sparkles size={10}/> IN THE SPOTLIGHT</span>}<span className="listing-category">{product.category}</span></div><p>{product.description}</p><span className="listing-host">{websiteHost(product.websiteUrl)}</span><BrandPageClicks product={product}/></div>
+  <div className="listing-row-details"><button className="listing-bid" type="button" disabled={product.brandId==='demo'} onClick={onBid} aria-label={`Raise bid for ${product.name}, current bid ${money(product.currentBid)}`} title="Raise this product’s bid">{money(product.currentBid)}<TrendingUp size={13}/></button><div className="listing-stats"><span>{timeAgo(product.listingStartsAt)}</span></div><div className="listing-row-social"><ShareListing product={product}/><button className="listing-visit" type="button" onClick={onVisit} aria-label={`Visit ${product.name}`}>Visit <ArrowUpRight size={13}/></button></div></div>
+ </article>;
+}
+
+function BrandPageClicks({product}:{product:Product}){const {brandClicks}=useAttention();return <BrandClicks count={brandClicks[product.id]||0} demo={product.brandId==='demo'} kind="brand"/>;}
+
 function LeaderboardRow({product,rank,onVisit,onBid}:{product:Product;rank:number;onVisit:()=>void;onBid:()=>void}){
-  const addOn=lastBidAddOn(product);
-  return <article className={`attention-product ${rank===1?'is-leader':''}`} role="listitem">
-    <span className={`product-rank rank-${rank}`}><small>#</small>{rank}</span>
-    <ProductLogo product={product}/>
-    <div className="product-story">
-      <div className="product-story-top">
-        <Link href={`/discover/product/${product.slug}`}>{product.name}</Link>
-        <span>{product.category}</span>
-      </div>
-      <p>{product.description}</p>
-    </div>
-    <div className="product-list-stat bid-stat"><strong>{money(product.currentBid)}</strong><small>Current bid</small></div>
-    <span className={`product-move ${addOn?'up':''}`} title={addOn?`Latest increase ${money(addOn)}`:'No recent movement'}>{addOn?<TrendingUp size={16}/>:'—'}</span>
-    <Button className="bid-cta" id={`bid-${product.id}`} onClick={onBid} aria-label={`Place a bid for ${product.name}`}>Bid</Button>
-    <button type="button" className="product-visit" id={`visit-${product.id}`} onClick={onVisit} aria-label={`Visit ${product.name}`}>Visit</button>
-  </article>;
+ return <article className={`attention-product brand-glass-card ${rank===1?'is-leader':''}`} role="listitem" style={{animationDelay:`${Math.min(rank,8)*65}ms`}}>
+ <BrandLink brandId={product.id} className="brand-card-link" href={`/brands/product/${product.slug}`} aria-label={`Open ${product.name} details`}/>
+ <span className={`product-rank rank-${rank}`}>{rank===1?<Crown size={22}/>:<><small>#</small>{rank-1}</>}</span><ProductLogo product={product}/>
+ <div className="product-story"><div className="product-story-top"><BrandLink brandId={product.id} href={`/brands/product/${product.slug}`}>{product.name}</BrandLink><span>{product.category}</span></div><p>{product.description}</p><BrandPageClicks product={product}/></div>
+ <div className="brand-card-side"><div className="product-list-stat bid-stat"><strong>{money(product.currentBid)}</strong><small>Current bid</small></div><div className="brand-card-actions"><Button className="bid-cta" disabled={product.brandId==='demo'} id={`bid-${product.id}`} onClick={onBid} aria-label={`Place a bid for ${product.name}`}>Bid <TrendingUp size={13}/></Button><button className="product-visit" type="button" id={`visit-${product.id}`} onClick={onVisit} aria-label={`Visit ${product.name}`}>Visit <ArrowUpRight size={13}/></button><ShareListing product={product}/></div></div></article>;
 }
 
 export function AttentionProduct({slug}:{slug:string}){
@@ -285,7 +277,7 @@ export function AttentionProduct({slug}:{slug:string}){
   const {s,go}=useStore();
   const params=useSearchParams();
   const p=state.products.find(product=>product.slug===slug);
-  const [visit,setVisit]=useState<string|null>(null);
+  const openWebsite=useWebsiteVisit();
   const [bid,setBid]=useState<string|null>(null);
   const paidReturn=params.get('paid')==='1';
   const intendedBid=Number(params.get('bid'));
@@ -299,57 +291,43 @@ export function AttentionProduct({slug}:{slug:string}){
   },[p?.id,paidReturn,initialIncrement]);
   if(!p)return repository.getStatus()==='loading'
     ? <><PublicHeader/><main className="public-container attention-detail"/><PublicFooter/></>
-    : <><PublicHeader/><main className="public-container attention-detail"><Empty title="This product hasn’t arrived yet." description="Explore the marketplace to find something new."><Link href="/discover" className="btn btn-primary">Explore products</Link></Empty></main><PublicFooter/></>;
+    : <><PublicHeader/><main className="public-container attention-detail"><Empty title="This product hasn’t arrived yet." description="Explore the marketplace to find something new."><Link href="/brands" className="btn btn-primary">Explore products</Link></Empty></main><PublicFooter/></>;
   return <>
     <PublicHeader/>
-    <main className="public-container attention-detail">
+    <main className="public-container attention-detail brand-profile-page" style={{'--brand-accent':p.color} as CSSProperties}>
+      <div className="audience-dock"><AudiencePulse/></div>
       <Breadcrumb name={p.name}/>
-      {paidReturn&&<div className="attention-success" role="status"><h3>Checkout complete. Your bid is confirming.</h3><p>Returning from Dodo does not apply the bid by itself. Rankings update after payment is confirmed in Test Mode.</p></div>}
-      <div className="attention-detail-hero">
-        <ProductLogo product={p}/>
-        <div>
-          <span className="eyebrow">BY {p.brandName}</span>
-          <h1>{p.name}</h1>
-          <p>{p.description}</p>
-          <div className="attention-tags"><span>{p.category}</span>{p.tags.map(tag=><span key={tag}>{tag}</span>)}<span>{isActive(p)?'Active listing':'Expired listing'}</span></div>
-        </div>
-        <div className="attention-detail-actions">
-          <Button id={`visit-${p.id}`} onClick={()=>setVisit(p.id)}>Visit <ArrowUpRight size={17}/></Button>
-          <Button variant="secondary" id={`bid-${p.id}`} disabled={!isActive(p)} onClick={()=>setBid(p.id)}>Place a bid</Button>
-        </div>
-      </div>
-      <ProductMetrics product={p}/>
-      <div className="attention-detail-grid">
-        <div>
-          <section className="attention-side-card">
-            <h2>About the product</h2>
-            <p>{p.description}</p>
-            <p>Built by {p.brandName}. Explore the website to learn more about the product.</p>
-            <div className="visit-website"><MousePointer2/><div><small>WEBSITE</small><strong>{websiteHost(p.websiteUrl)}</strong></div></div>
-            <p className="listing-dates">Listed {new Date(p.listingStartsAt).toLocaleDateString()} · {isActive(p)?'Expires':'Expired'} {new Date(p.listingEndsAt).toLocaleDateString()}</p>
-            <DemoNote>Fictional sample or locally created preview product. Website visits stay open. Paid bids require a signed-in Dodo Test Mode checkout.</DemoNote>
-          </section>
-          {p.campaign&&<section className="attention-side-card">
-            <span className="eyebrow">OPTIONAL CREATOR OPPORTUNITY</span>
-            <h2>{p.campaign.title}</h2>
-            <p>{p.campaign.description}</p>
-            <p>{p.campaign.requirements}</p>
-            <strong>Creator budget: {money(p.campaign.budget)}</strong>
-            {p.campaign.existingCampaignId&&<Button variant="secondary" onClick={()=>go(s.session&&s.role==='creator'?`/creator/discover?q=${encodeURIComponent(p.name)}`:'/login?role=creator')}>Explore creator opportunities <ArrowRight size={16}/></Button>}
+      {paidReturn&&<div className="attention-success" role="status"><h3>Checkout complete. Your bid is confirming.</h3><p>Rankings update after payment is confirmed in Test Mode.</p></div>}
+      <article className="brand-profile-sheet">
+        <header className="profile-intro">
+          <div className="profile-topline"><span><Sparkles size={14}/> THE BRAND SPOTLIGHT</span><span className="profile-status"><i/>{isActive(p)?'Active listing':'Expired listing'}</span></div>
+          <div className="profile-identity"><ProductLogo product={p}/><div><span className="profile-maker">By {p.brandName}</span><h1>{p.name}</h1><div className="attention-tags"><span>{p.category}</span>{p.tags.map(tag=><span key={tag}>{tag}</span>)}</div></div></div>
+          <p className="profile-description">{p.description}</p>
+          <div className="profile-action-row">
+            <Button id={`visit-${p.id}`} onClick={()=>openWebsite(p)}>Visit website <ArrowUpRight size={18}/></Button>
+            <Button variant="secondary" id={`bid-${p.id}`} disabled={!isActive(p)||p.brandId==='demo'} onClick={()=>setBid(p.id)}>Place a bid <TrendingUp size={16}/></Button>
+            <ShareListing product={p}/>
+            <span className="profile-domain"><GlobeIcon size={14}/>{websiteHost(p.websiteUrl)}</span>
+          </div>
+        </header>
+        <div className="profile-stats"><ProductMetrics product={p}/></div>
+        <div className="profile-body">
+          <div className="profile-story">
+            <section className="profile-section"><span className="profile-section-label">01 / THE IDEA</span><h2>A little more about {p.name}.</h2><p>{p.description}</p><p>Made by {p.brandName}. Take a closer look at the website to explore what they’re building.</p><button type="button" className="profile-website-link" onClick={()=>openWebsite(p)}>Explore {websiteHost(p.websiteUrl)} <ArrowUpRight size={16}/></button></section>
+          {p.campaign&&<section className="profile-section">
+            <span className="profile-section-label">CREATOR OPPORTUNITY</span><h2>{p.campaign.title}</h2><p>{p.campaign.description}</p><p>{p.campaign.requirements}</p><strong>Creator budget: {money(p.campaign.budget)}</strong>
+            {p.campaign.existingCampaignId&&<Button variant="secondary" onClick={()=>go(s.session&&s.role==='creator'?`/creator/brands?q=${encodeURIComponent(p.name)}`:'/login?role=creator')}>Explore creator opportunities <ArrowRight size={16}/></Button>}
           </section>}
-          <section className="attention-side-card">
-            <h2>Bid history</h2>
-            <ol className="attention-bid-history">{p.bids.map(bidItem=><li key={bidItem.id}><span><TrendingUp size={16}/> {money(bidItem.amount)}</span><time dateTime={new Date(bidItem.createdAt).toISOString()}>{timeAgo(bidItem.createdAt)}</time></li>)}</ol>
-          </section>
+          </div>
+          <aside className="profile-sidebar">
+            <div className="profile-rank-note"><Crown size={22}/><div><strong>{getRankedProducts(state.products)[0]?.id===p.id?'The Crown Jewel':'In the spotlight'}</strong><p>{getRankedProducts(state.products)[0]?.id===p.id?'Leading the board. Setting the pace.':'Good ideas deserve to be seen.'}</p></div></div>
+          </aside>
         </div>
-        <section className="attention-side-card">
-          <h2>Latest activity</h2>
-          <ActivityList events={state.activity.filter(event=>event.productId===p.id)} limit={20}/>
-        </section>
-      </div>
+        <footer className="profile-footnote"><DemoNote>{p.brandId==='demo'?'Demo brand. The website opens example.com; website clicks are tracked separately.':'Website visits are open to everyone. Bid increases use Dodo Test Mode checkout.'}</DemoNote></footer>
+      </article>
     </main>
     <PublicFooter/>
-    <VisitDialog productId={visit} onClose={()=>setVisit(null)} onBid={id=>{setVisit(null);setBid(id);}}/>
+
     <BidDialog productId={bid} onClose={()=>setBid(null)} initialIncrement={initialIncrement}/>
   </>;
 }

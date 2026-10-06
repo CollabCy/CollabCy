@@ -33,11 +33,11 @@ export function parseCheckoutBody(body: unknown): { product_id: string; incremen
 }
 
 export function checkoutReturnPath(slug: string) {
-  return `/discover/product/${encodeURIComponent(slug)}?paid=1`;
+  return `/brands/product/${encodeURIComponent(slug)}?paid=1`;
 }
 
 export function bidLoginPath(slug: string, increment: number) {
-  const next = `/discover/product/${encodeURIComponent(slug)}?bid=${increment}`;
+  const next = `/brands/product/${encodeURIComponent(slug)}?bid=${increment}`;
   return `/login/5221?next=${encodeURIComponent(next)}`;
 }
 
