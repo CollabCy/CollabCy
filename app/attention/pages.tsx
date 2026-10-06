@@ -1,5 +1,6 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
+import {useSearchParams} from 'next/navigation';
 import Link from '../ui/app-link';
 import {ArrowUpRight,ArrowRight,Check,Trophy,Layers,TrendingUp,Users,MousePointer2,ChevronRight,Search,Heart,BarChart3,Crown,Sparkles} from 'lucide-react';
 import {Accordion,AccordionItem,AccordionTrigger,AccordionContent} from '@/components/ui/accordion';
@@ -12,11 +13,11 @@ import {attentionCategories,getRankedProducts,getFilteredProducts,isActive,timeA
 import {ProductLogo,LiveBadge,ActivityList,VisitDialog,BidDialog,ProductMetrics,lastBidAddOn} from './components';
 
 const faqs=[
-  ['How does ranking work?','Products with higher current bids rank higher. When bids are equal, the earlier bid keeps its position. Expired listings leave the active leaderboard. Dollar amounts are simulated demo values and no real money is charged. Ranking and bid state are stored and updated in the CollabCy backend.'],
-  ['How much does it cost to list a product?',`A ${LISTING_DAYS}-day product listing has a $${LISTING_FEE} listing fee, plus your chosen initial bid (from $${MIN_INITIAL_BID}). Brand account access is free. These dollar amounts are simulated demo values. No real money is currently charged.`],
-  ['Can I update my bid later?','Yes. Open a product and choose Place bid. The minimum shown is the amount needed to move above the next product, or increase the leading bid. Review your projected rank before confirming.'],
+  ['How does ranking work?','Products with higher current bids rank higher. When bids are equal, the earlier bid keeps its position. Expired listings leave the active leaderboard. Ranking formulas are unchanged. Paid bid add-ons are applied after Dodo confirms payment in Test Mode.'],
+  ['How much does it cost to list a product?',`A ${LISTING_DAYS}-day product listing has a $${LISTING_FEE} listing fee, plus your chosen initial bid (from $${MIN_INITIAL_BID}). Brand account access is free. Listing creation remains an unpaid demo. No real money is currently charged to publish a listing.`],
+  ['Can I update my bid later?','Yes. Open a product and choose Place bid. The minimum shown is the amount needed to move above the next product, or increase the leading bid. Review your projected rank, then pay the add-on through Dodo Test Mode checkout. Rankings update after payment is confirmed.'],
   ['What happens when a listing expires?','It leaves the active leaderboard and cannot receive new bids. Its product details and bid history remain available.'],
-  ['Do I need an account to place a bid?','No. Browsing, bidding, and listing a product do not require a CollabCy account. No real payment is collected.'],
+  ['Do I need an account to place a bid?','Browsing, visiting a website, and listing a product do not require a CollabCy account. Placing a bid does. Sign in at the private login page, then complete Dodo Test Mode checkout. Returning from checkout is not proof of payment.'],
   ['Can I use the marketplace only for website visits?','Yes. Attention Marketplace listings are for product discovery, visibility, and website traffic.'],
   ['Can creators discover my product without a campaign?','Yes. Every active product is public. Visitors can explore its details and website from the leaderboard.'],
 ];
@@ -54,7 +55,7 @@ export function AttentionMarketplace(){
               </div>
               <div className="attention-trust">
                 <span><Search size={15}/>Product discovery</span>
-                <span><BarChart3 size={15}/>Live demo bidding</span>
+                <span><BarChart3 size={15}/>Test Mode bidding</span>
                 <span><Heart size={15}/>Find your next favorite</span>
               </div>
             </div>
@@ -120,7 +121,7 @@ export function AttentionMarketplace(){
         <div className="attention-steps">
           {[
             {icon:Layers,title:'List your product',text:'Tell creators what you’re building. Your bid determines your ranking.'},
-            {icon:TrendingUp,title:'Add to your bid',text:'Increase your position anytime by adding only the simulated add-on. No real money is charged.'},
+            {icon:TrendingUp,title:'Add to your bid',text:'Increase your position by paying only the add-on through Dodo Test Mode checkout. The bid is applied after payment is confirmed.'},
             {icon:Users,title:'Move up the ranking',text:'Climb as your cumulative bid grows.'},
             {icon:Trophy,title:'Get discovered',text:'Creators explore and find your product.'},
           ].map(({icon:Icon,title,text},index)=><div key={title}><span>{String(index+1).padStart(2,'0')}</span><Icon/><h3>{title}</h3><p>{text}</p></div>)}
@@ -282,9 +283,20 @@ function LeaderboardRow({product,rank,onVisit,onBid}:{product:Product;rank:numbe
 export function AttentionProduct({slug}:{slug:string}){
   const {state,repository}=useAttention();
   const {s,go}=useStore();
+  const params=useSearchParams();
   const p=state.products.find(product=>product.slug===slug);
   const [visit,setVisit]=useState<string|null>(null);
   const [bid,setBid]=useState<string|null>(null);
+  const paidReturn=params.get('paid')==='1';
+  const intendedBid=Number(params.get('bid'));
+  const initialIncrement=Number.isInteger(intendedBid)&&intendedBid>0?intendedBid:undefined;
+  useEffect(()=>{
+    if(paidReturn) repository.refresh();
+  },[paidReturn,repository]);
+  useEffect(()=>{
+    if(!p||paidReturn||!initialIncrement)return;
+    setBid(p.id);
+  },[p?.id,paidReturn,initialIncrement]);
   if(!p)return repository.getStatus()==='loading'
     ? <><PublicHeader/><main className="public-container attention-detail"/><PublicFooter/></>
     : <><PublicHeader/><main className="public-container attention-detail"><Empty title="This product hasn’t arrived yet." description="Explore the marketplace to find something new."><Link href="/discover" className="btn btn-primary">Explore products</Link></Empty></main><PublicFooter/></>;
@@ -292,6 +304,7 @@ export function AttentionProduct({slug}:{slug:string}){
     <PublicHeader/>
     <main className="public-container attention-detail">
       <Breadcrumb name={p.name}/>
+      {paidReturn&&<div className="attention-success" role="status"><h3>Checkout complete. Your bid is confirming.</h3><p>Returning from Dodo does not apply the bid by itself. Rankings update after payment is confirmed in Test Mode.</p></div>}
       <div className="attention-detail-hero">
         <ProductLogo product={p}/>
         <div>
@@ -314,7 +327,7 @@ export function AttentionProduct({slug}:{slug:string}){
             <p>Built by {p.brandName}. Explore the website to learn more about the product.</p>
             <div className="visit-website"><MousePointer2/><div><small>WEBSITE</small><strong>{websiteHost(p.websiteUrl)}</strong></div></div>
             <p className="listing-dates">Listed {new Date(p.listingStartsAt).toLocaleDateString()} · {isActive(p)?'Expires':'Expired'} {new Date(p.listingEndsAt).toLocaleDateString()}</p>
-            <DemoNote>Fictional sample or locally created preview product. No live traffic or payments.</DemoNote>
+            <DemoNote>Fictional sample or locally created preview product. Website visits stay open. Paid bids require a signed-in Dodo Test Mode checkout.</DemoNote>
           </section>
           {p.campaign&&<section className="attention-side-card">
             <span className="eyebrow">OPTIONAL CREATOR OPPORTUNITY</span>
@@ -337,6 +350,6 @@ export function AttentionProduct({slug}:{slug:string}){
     </main>
     <PublicFooter/>
     <VisitDialog productId={visit} onClose={()=>setVisit(null)} onBid={id=>{setVisit(null);setBid(id);}}/>
-    <BidDialog productId={bid} onClose={()=>setBid(null)}/>
+    <BidDialog productId={bid} onClose={()=>setBid(null)} initialIncrement={initialIncrement}/>
   </>;
 }

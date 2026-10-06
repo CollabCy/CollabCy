@@ -105,16 +105,26 @@ export function persistMarketplace(state: { session?: boolean; remoteWorkspace?:
 export function postAuthPath(role: Role, onboarded: boolean, next?: string | null, platformVerifier = false): string {
   const safeNext = sanitizeNextParam(next);
   const directory = workspaceDirectoryPath(role, safeNext);
+  const attentionReturn = attentionReturnPath(safeNext);
   if (!onboarded) {
     if (role === "brand" && safeNext === "promote") return "/onboarding?next=promote";
     if (safeNext && directory) return `/onboarding?next=${encodeURIComponent(safeNext)}`;
+    if (attentionReturn) return `/onboarding?next=${encodeURIComponent(attentionReturn)}`;
     return "/onboarding";
   }
   if (directory) return directory;
+  if (attentionReturn) return attentionReturn;
   if (platformVerifier && safeNext !== "promote") return "/admin";
   return role === "brand" && safeNext === "promote"
     ? "/brand/products/new"
     : `/${role}/dashboard`;
+}
+
+function attentionReturnPath(next?: string | null): string | null {
+  if (!next || typeof next !== "string") return null;
+  const path = toInAppPath(next);
+  if (path === "/discover" || path.startsWith("/discover/")) return path;
+  return null;
 }
 
 function workspaceDirectoryPath(role: Role, next?: string | null): string | null {
@@ -2617,27 +2627,10 @@ export async function loadAttentionMarketplace(): Promise<{
 }
 
 export async function placeAttentionBid(productId: string, increment: number): Promise<{ result?: AttentionBidResult; error?: string; skipped?: boolean }> {
-  const supabase = getSupabase();
-  if (!supabase) return { skipped: true };
   if (!isAttentionProductId(productId)) return { error: "Product not found." };
   const incrementError = validateAttentionIncrement(increment);
   if (incrementError) return { error: incrementError };
-  const { data, error } = await supabase.rpc("place_attention_bid", { p_product_id: productId, p_increment: increment });
-  if (error) {
-    return { error: attentionClientError("place_bid", error, "Could not place this bid.") };
-  }
-  const row = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
-  const productIdOut = typeof row?.product_id === "string" ? row.product_id : "";
-  const bidId = typeof row?.bid_id === "string" ? row.bid_id : "";
-  const bidAmount = asNumber(row?.amount, 0);
-  const currentBid = asNumber(row?.current_bid, bidAmount);
-  const rank = asNumber(row?.resulting_rank, 0);
-  const createdAt = typeof row?.created_at === "string" ? asEpoch(row.created_at) : Date.now();
-  if (!productIdOut || !bidId || !Number.isInteger(bidAmount) || bidAmount < 1 || rank < 1) {
-    console.error("[attention]", "place_bid", "unexpected_payload");
-    return { error: "Could not place this bid." };
-  }
-  return { result: { productId: productIdOut, bidId, amount: bidAmount, currentBid, rank, createdAt } };
+  return { error: "Bids are placed through checkout." };
 }
 
 export async function recordAttentionVisit(productId: string): Promise<{ clickCount?: number; error?: string; skipped?: boolean }> {
