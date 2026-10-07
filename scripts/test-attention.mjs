@@ -68,6 +68,18 @@ const main=async()=>{
  assert.equal(pay.fulfillmentAction({eventType:'payment.succeeded',paymentStatus:'paid',webhookId:'wh_2',existingWebhookId:'wh_1',dodoPaymentId:'pay_1',existingDodoPaymentId:'pay_1',amountCents:500,paidAmount:500,currency:'USD',metadataMatch:true}),'continue_apply');
  assert.equal(pay.fulfillmentAction({eventType:'payment.succeeded',paymentStatus:'pending',webhookId:'wh_1',existingWebhookId:null,dodoPaymentId:'pay_1',existingDodoPaymentId:null,amountCents:500,paidAmount:400,currency:'USD',metadataMatch:true}),'reject_mismatch');
  assert.equal(pay.fulfillmentAction({eventType:'payment.succeeded',paymentStatus:'pending',webhookId:'wh_1',existingWebhookId:null,dodoPaymentId:'pay_1',existingDodoPaymentId:null,amountCents:500,paidAmount:500,currency:'USD',metadataMatch:true}),'mark_paid_and_apply');
+ assert.equal(pay.paidAmountMatches(200,200,'USD'),true);
+ assert.equal(pay.paidAmountMatches(200,400,'USD'),false);
+ assert.equal(pay.paidAmountMatches(200,23762,'INR'),false);
+ assert.equal(pay.paidAmountMatches(200,23762,'INR',{amount:236,currency:'USD'}),true);
+ const inrEvent=pay.extractPaymentSucceeded({type:'payment.succeeded',data:{payment_id:'pay_test',checkout_session_id:'cks_test',total_amount:23762,currency:'INR',settlement_amount:236,settlement_currency:'USD',metadata:{payment_id:'7082899b-474a-40a4-b1f4-da4f7d1e8a52',product_id:'0389d9bf-09de-4364-97b2-026eb2327d10',increment:'2'}}});
+ assert.equal(inrEvent.currency,'INR');
+ assert.equal(inrEvent.total_amount,23762);
+ assert.equal(inrEvent.settlement_currency,'USD');
+ assert.equal(inrEvent.settlement_amount,236);
+ assert.equal(inrEvent.metadata.user_id,undefined);
+ assert.equal(pay.paidAmountMatches(Number(inrEvent.metadata.increment)*100,inrEvent.total_amount,inrEvent.currency,{amount:inrEvent.settlement_amount,currency:inrEvent.settlement_currency}),true);
+ assert.equal(pay.fulfillmentAction({eventType:'payment.succeeded',paymentStatus:'pending',webhookId:'wh_1',existingWebhookId:null,dodoPaymentId:'pay_1',existingDodoPaymentId:null,amountCents:200,paidAmount:23762,currency:'INR',metadataMatch:true,settlement:{amount:236,currency:'USD'}}),'mark_paid_and_apply');
  const meta=pay.checkoutMetadata({payment_id:'p',product_id:'prod',increment:5});
  assert.equal(typeof meta.increment,'string');
  assert.equal(meta.user_id,undefined);

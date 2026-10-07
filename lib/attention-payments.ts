@@ -109,37 +109,70 @@ export function asMetadataRecord(value: unknown): Record<string, string> {
   return record;
 }
 
+function asFiniteAmount(value: unknown) {
+  const amount = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
 export function extractPaymentSucceeded(event: unknown): {
   type: string;
   payment_id: string;
   checkout_session_id: string | null;
   total_amount: number;
   currency: string;
+  settlement_amount: number;
+  settlement_currency: string;
   metadata: Record<string, string>;
 } | null {
   if (!event || typeof event !== "object") return null;
   const payload = event as { type?: unknown; data?: unknown };
   const type = typeof payload.type === "string" ? payload.type : "";
   if (!payload.data || typeof payload.data !== "object") {
-    return { type, payment_id: "", checkout_session_id: null, total_amount: 0, currency: "", metadata: {} };
+    return {
+      type,
+      payment_id: "",
+      checkout_session_id: null,
+      total_amount: 0,
+      currency: "",
+      settlement_amount: 0,
+      settlement_currency: "",
+      metadata: {},
+    };
   }
   const data = payload.data as Record<string, unknown>;
   const paymentId = typeof data.payment_id === "string" ? data.payment_id : typeof data.id === "string" ? data.id : "";
   const sessionId = typeof data.checkout_session_id === "string" ? data.checkout_session_id : null;
-  const totalAmount = typeof data.total_amount === "number" ? data.total_amount : Number(data.total_amount);
   const currency = typeof data.currency === "string" ? data.currency : "";
+  const settlementCurrency = typeof data.settlement_currency === "string" ? data.settlement_currency : "";
   return {
     type,
     payment_id: paymentId,
     checkout_session_id: sessionId,
-    total_amount: Number.isFinite(totalAmount) ? totalAmount : 0,
+    total_amount: asFiniteAmount(data.total_amount),
     currency,
+    settlement_amount: asFiniteAmount(data.settlement_amount),
+    settlement_currency: settlementCurrency,
     metadata: asMetadataRecord(data.metadata),
   };
 }
 
-export function paidAmountMatches(amountCents: number, paidAmount: number, currency: string) {
-  return amountCents > 0 && paidAmount === amountCents && currency.toUpperCase() === ATTENTION_BID_CURRENCY;
+export function paidAmountMatches(
+  amountCents: number,
+  paidAmount: number,
+  currency: string,
+  settlement?: { amount?: number; currency?: string },
+) {
+  if (!(amountCents > 0)) return false;
+  const charged = (currency || "").toUpperCase();
+  if (charged === ATTENTION_BID_CURRENCY) return paidAmount === amountCents;
+  const settledCurrency = (settlement?.currency || "").toUpperCase();
+  const settledAmount = settlement?.amount;
+  return (
+    settledCurrency === ATTENTION_BID_CURRENCY &&
+    typeof settledAmount === "number" &&
+    Number.isFinite(settledAmount) &&
+    settledAmount > 0
+  );
 }
 
 export function metadataMatchesPending(row: {
@@ -169,10 +202,11 @@ export function fulfillmentAction(input: {
   paidAmount: number;
   currency: string;
   metadataMatch: boolean;
+  settlement?: { amount?: number; currency?: string };
 }): "ignore_event" | "reject_mismatch" | "already_applied" | "continue_apply" | "mark_paid_and_apply" {
   if (!isPaymentSucceededEvent(input.eventType)) return "ignore_event";
   if (input.paymentStatus === "applied") return "already_applied";
-  if (!input.metadataMatch || !paidAmountMatches(input.amountCents, input.paidAmount, input.currency)) {
+  if (!input.metadataMatch || !paidAmountMatches(input.amountCents, input.paidAmount, input.currency, input.settlement)) {
     return "reject_mismatch";
   }
   if (
