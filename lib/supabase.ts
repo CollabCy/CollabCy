@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import type { ActivityEvent, Bid, Product } from "@/app/attention/model";
-import { isActive, LISTING_DAYS, safeWebsite } from "@/app/attention/model";
+import { isActive, safeWebsite } from "@/app/attention/model";
 import { isAttentionProductId, validateAttentionIncrement, validateAttentionListing } from "@/app/attention/validation";
 import { blankProfile, campaignLetter, canonicalMarketplaceRole, isCreatorUserId, isUuid, realDirectoryCreators, roleConflictNotice, type Campaign, type CampaignApplication, type ChatMessage, type Connection, type ConnectionKind, type ConnectionStatus, type Conversation, type Creator, type Notice, type NotificationType, type Profile, type Role, type SocialAccount, type State, type ApplicationStatus, type VerificationStatus } from "@/app/data";
 import { sanitizeNextParam, toInAppPath } from "@/lib/app-origin";
@@ -2680,7 +2680,6 @@ export async function publishAttentionListing(input: AttentionListingWrite): Pro
     [],
     now,
   );
-  if (!product.listingEndsAt) product.listingEndsAt = listingStartsAt + LISTING_DAYS * 86400000;
   return { product };
 }
 

@@ -28,7 +28,12 @@ assert.match(link,/toInAppPath\(href\)/);
 
 const publicUi=readFileSync(join(process.cwd(),'app/ui/public.tsx'),'utf8');
 assert.match(publicUi,/from '\.\/app-link'/);
-assert.match(publicUi,/href="\/login"/);
-assert.match(publicUi,/href="\/signup"/);
+const publicHeader=publicUi.slice(publicUi.indexOf('export function PublicHeader'),publicUi.indexOf('export function PublicFooter'));
+const publicFooter=publicUi.slice(publicUi.indexOf('export function PublicFooter'),publicUi.indexOf('export const faq'));
+assert.doesNotMatch(publicHeader,/href="\/login"/);
+assert.doesNotMatch(publicHeader,/href="\/signup"/);
+assert.doesNotMatch(publicFooter,/href="\/login"/);
+assert.doesNotMatch(publicFooter,/href="\/signup"/);
+assert.match(auth,/continueWithOAuth\('google'\)/);
 
 console.log('PASS: local navigation stays origin-relative; auth redirects use the current origin.');

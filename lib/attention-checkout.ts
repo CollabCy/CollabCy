@@ -8,8 +8,7 @@ import {
   type RankingProductRow,
 } from "@/lib/attention-payments";
 import { attentionBidProductId, getDodoClient } from "@/lib/dodo";
-import { getRequestAuthUser, getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { User } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { Bid } from "@/app/attention/model";
 
 export class AttentionCheckoutError extends Error {
@@ -19,19 +18,12 @@ export class AttentionCheckoutError extends Error {
   }
 }
 
+const CHECKOUT_WINDOW_MS = 10 * 60 * 1000;
+const CHECKOUT_MAX = 10;
+const checkoutAttempts = new Map<string, number[]>();
+
 function jsonSafeError(error: unknown) {
   return error instanceof AttentionCheckoutError ? error.message : "Could not start checkout.";
-}
-
-function customerFromUser(user: User) {
-  const email = user.email?.trim();
-  if (!email) return undefined;
-  const meta = user.user_metadata ?? {};
-  const name =
-    (typeof meta.full_name === "string" && meta.full_name.trim()) ||
-    (typeof meta.name === "string" && meta.name.trim()) ||
-    email;
-  return { email, name };
 }
 
 function checkoutOrigin(request: Request) {
@@ -45,6 +37,24 @@ function checkoutOrigin(request: Request) {
     }
   }
   return url.origin;
+}
+
+function checkoutClientKey(request: Request) {
+  const forwarded = request.headers.get("x-forwarded-for") || "";
+  const ip = forwarded.split(",")[0]?.trim() || request.headers.get("x-real-ip") || request.headers.get("cf-connecting-ip") || "unknown";
+  return ip.slice(0, 64);
+}
+
+function tooManyCheckouts(key: string) {
+  const now = Date.now();
+  const recent = (checkoutAttempts.get(key) || []).filter((time) => now - time < CHECKOUT_WINDOW_MS);
+  if (recent.length >= CHECKOUT_MAX) {
+    checkoutAttempts.set(key, recent);
+    return true;
+  }
+  recent.push(now);
+  checkoutAttempts.set(key, recent);
+  return false;
 }
 
 async function loadRankingProducts(): Promise<{ products: ReturnType<typeof rankingProductsFromRows>; error?: string }> {
@@ -79,9 +89,8 @@ async function loadRankingProducts(): Promise<{ products: ReturnType<typeof rank
 
 export async function createAttentionBidCheckout(request: Request): Promise<Response> {
   try {
-    const user = await getRequestAuthUser(request);
-    if (!user) {
-      return Response.json({ error: "Sign in to place a bid." }, { status: 401 });
+    if (tooManyCheckouts(checkoutClientKey(request))) {
+      return Response.json({ error: "Please wait a moment before trying again." }, { status: 429 });
     }
 
     let body: unknown;
@@ -113,7 +122,7 @@ export async function createAttentionBidCheckout(request: Request): Promise<Resp
     const { data: inserted, error: insertError } = await admin
       .from("attention_bid_payments")
       .insert({
-        user_id: user.id,
+        user_id: null,
         product_id: parsed.product_id,
         increment: parsed.increment,
         amount_cents: amountCents,
@@ -140,11 +149,9 @@ export async function createAttentionBidCheckout(request: Request): Promise<Resp
           },
         ],
         return_url: returnUrl,
-        customer: customerFromUser(user),
         metadata: checkoutMetadata({
           payment_id: paymentId,
           product_id: parsed.product_id,
-          user_id: user.id,
           increment: parsed.increment,
         }),
         feature_flags: { redirect_immediately: true },

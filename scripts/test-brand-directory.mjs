@@ -57,7 +57,9 @@ const main=()=>{
  assert.match(marketplace,/login\?next=\$\{encodeURIComponent\(path\)\}/);
  assert.doesNotMatch(marketplace,/CreatorDiscovery publicView/);
  assert.doesNotMatch(marketplace,/attention_products/);
- assert.match(marketplace,/if\(path==='\/discover'\)return <AttentionMarketplace\/>/);
+ assert.match(marketplace,/if\(path==='\/'\)return <AttentionMarketplace\/>/);
+ assert.match(marketplace,/if\(path==='\/discover'\)\{router\.replace\('\/'\);return\}/);
+ assert.doesNotMatch(marketplace,/if\(path==='\/discover'\)return <AttentionMarketplace\/>/);
 
  const migration=read('supabase/migrations/20261001120000_open_marketplace_and_creator_verification.sql');
  assert.match(migration,/public_creators/);

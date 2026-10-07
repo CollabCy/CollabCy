@@ -44,7 +44,7 @@ export function Legal({kind}:{kind:'privacy'|'terms'}){
 }
 function PrivacyCopy(){
   return <>
-    <p className="lead">This page describes how CollabCy currently processes information. The public launch surface is the Attention Marketplace at /discover, /discover/product pages, and /brand/products/new. Creator-brand collaboration tools may remain unavailable or Coming Soon.</p>
+    <p className="lead">This page describes how CollabCy currently processes information. The public launch surface is the Attention Marketplace at /, /discover/product pages, and /brand/products/new. Creator-brand collaboration tools may remain unavailable or Coming Soon.</p>
     <h2>Account and authentication</h2>
     <p>If you create or sign in to a CollabCy account, we may process your email address and authentication information. Supported sign-in methods include email and password, Google, X, and Facebook. Authentication is handled by Supabase Auth. Passwords are handled by Supabase Auth and are not stored as application passwords in the CollabCy product database.</p>
     <h2>Profile information</h2>
@@ -52,19 +52,19 @@ function PrivacyCopy(){
     <h2>Attention Marketplace</h2>
     <p>Listings and related marketplace information are publicly visible. Information submitted to the Attention Marketplace may include product or brand name, description, website URL, category, tags, logo or image, listing details, bid amounts, public ranking and activity information, and visit or click metrics.</p>
     <h2>Use without an account</h2>
-    <p>The Attention Marketplace currently allows browsing, website visits, and listing a product without creating an account. Placing a bid requires a CollabCy account. Listing a product remains an unpaid demo. That does not mean those actions are anonymous in every technical sense. CollabCy may still process the public listing or bid information you submit, along with technical request information used for security and abuse prevention.</p>
+    <p>The Attention Marketplace currently allows browsing, website visits, listing a product, and placing a bid without creating an account. Listing a product is free. Bid add-ons are paid through Dodo checkout. That does not mean those actions are anonymous in every technical sense. CollabCy may still process the public listing or bid information you submit, along with technical request information used for security and abuse prevention.</p>
     <h2>Security and abuse prevention</h2>
     <p>CollabCy may process technical request information, including IP-related information, to operate the service, limit abuse, and apply rate limiting.</p>
     <h2>Browser storage</h2>
     <p>CollabCy uses essential browser storage to keep a signed-in session, remember application preferences on a device, and hold temporary OAuth or navigation state. These are not advertising or tracking cookies.</p>
     <h2>Services we use</h2>
-    <p>CollabCy currently uses Supabase for authentication, database, and related backend services. Google, X, and Facebook may receive information if you choose those sign-in options. Hosting and infrastructure providers process requests needed to deliver the website. Dodo Payments processes Attention Marketplace bid checkout in Test Mode for signed-in users. CollabCy does not currently use in-app analytics, advertising pixels, or session replay. Collaboration payouts are not currently active.</p>
+    <p>CollabCy currently uses Supabase for authentication, database, and related backend services. Google, X, and Facebook may receive information if you choose those sign-in options. Hosting and infrastructure providers process requests needed to deliver the website. Dodo Payments processes Attention Marketplace bid checkout in Test Mode. CollabCy does not currently use in-app analytics, advertising pixels, or session replay. Collaboration payouts are not currently active.</p>
     <h2>How long information is kept</h2>
     <p>CollabCy may retain information as needed to operate the product, protect security, handle disputes, meet legal obligations, or for other legitimate documented purposes. This page does not set a fixed retention period.</p>
     <h2>Your control</h2>
     <p>If you have an account, you can update profile information from Settings where that control is available. You can request deletion of account-associated personal data by emailing <a href="mailto:admin@collabcy.app">admin@collabcy.app</a>. Include the email address on the account where applicable. See the Data Deletion page for more detail.</p>
     <h2>Anonymous marketplace records</h2>
-    <p>Anonymous Attention Marketplace listings are not currently tied to an authenticated account in the same way as account profile data. Paid bids are tied to the signed-in account that completed checkout. CollabCy does not automatically delete anonymous marketplace listings when an account is removed, because they may not be linked to an account.</p>
+    <p>Anonymous Attention Marketplace listings and paid bids are not currently tied to an authenticated CollabCy account. CollabCy does not automatically delete anonymous marketplace listings when an account is removed, because they may not be linked to an account.</p>
     <h2>Contact</h2>
     <p>Privacy and data-deletion requests: <a href="mailto:admin@collabcy.app">admin@collabcy.app</a>.</p>
   </>;
@@ -75,9 +75,9 @@ function TermsCopy(){
     <h2>Using CollabCy</h2>
     <p>CollabCy provides tools for creator and brand discovery and promotion. The Attention Marketplace is currently the public launch surface. Collaboration functionality may remain unavailable or Coming Soon.</p>
     <h2>Attention Marketplace</h2>
-    <p>Visitors can discover public listings and submit listings without an account. Listing creation remains an unpaid demo. Placing a bid requires a signed-in CollabCy account and a Dodo Payments checkout in Test Mode. Ranking changes based on the marketplace bidding mechanism after a paid bid is confirmed. Returning from checkout is not itself proof of payment and does not apply the bid.</p>
+    <p>Visitors can discover public listings, submit listings, and place bids without an account. Listing creation is free. Bid add-ons use Dodo Payments checkout in Test Mode. Ranking changes based on the marketplace bidding mechanism after a paid bid is confirmed. Returning from checkout is not itself proof of payment and does not apply the bid.</p>
     <h2>Use without an account</h2>
-    <p>Browsing, website visits, and listing a product can currently be performed without creating an account. Bidding cannot.</p>
+    <p>Browsing, website visits, listing a product, and placing a bid can currently be performed without creating an account.</p>
     <h2>Public information</h2>
     <p>Information submitted to the public Attention Marketplace may be displayed publicly, including names, descriptions, logos or images, website URLs, bid amounts, ranking, and activity.</p>
     <h2>User-submitted content</h2>
@@ -87,7 +87,7 @@ function TermsCopy(){
     <h2>Platform role</h2>
     <p>CollabCy provides the marketplace and product interface. CollabCy does not guarantee listing performance, traffic, ranking outcomes, commercial results, or collaboration outcomes.</p>
     <h2>Attention Marketplace bids</h2>
-    <p>Attention Marketplace bid add-ons are processed by Dodo Payments in Test Mode. You pay only the add-on shown at checkout, not the cumulative bid total. Test Mode is not live production billing. Listing creation remains unpaid/demo. Collaboration payouts are not processed yet.</p>
+    <p>Attention Marketplace bid add-ons are processed by Dodo Payments in Test Mode. You pay only the add-on shown at checkout, not the cumulative bid total. Test Mode is not live production billing. Listing creation is free. Collaboration payouts are not processed yet.</p>
     <h2>Content removal</h2>
     <p>CollabCy may remove or restrict content that violates these Terms or platform rules.</p>
     <h2>Accounts</h2>
@@ -112,7 +112,7 @@ export function DataDeletion(){
       <li>If you signed in with Facebook Login, mention that in your request.</li>
     </ol>
     <h2>Anonymous Attention Marketplace content</h2>
-    <p>Anonymous Attention Marketplace listings are not currently tied to an authenticated account in the same way as account data. Paid bids are tied to the signed-in account that completed checkout. A deletion request for anonymous marketplace content may need additional information so the relevant listing can be identified. CollabCy does not automatically delete anonymous marketplace listings when an account is removed.</p>
+    <p>Anonymous Attention Marketplace listings and paid bids are not currently tied to an authenticated account in the same way as account data. A deletion request for anonymous marketplace content may need additional information so the relevant listing can be identified. CollabCy does not automatically delete anonymous marketplace listings when an account is removed.</p>
     <h2>What happens after a request</h2>
     <p>CollabCy reviews deletion requests. There is no automated self-serve deletion timer, and we do not promise a specific completion time. Some records may be retained where needed for legitimate operational, security, or legal reasons.</p>
     <div className="hero-actions">

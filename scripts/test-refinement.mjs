@@ -30,7 +30,7 @@ assert.match(auth,/Please tick this checkbox to continue/);
 const landing=read('app/ui/public.tsx');
 assert.doesNotMatch(landing,/Take a look around/);
 assert.match(landing,/Discover opportunities/);
-assert.match(landing,/href="\/discover"/);
+assert.match(landing,/className="demo-link" href="\/"/);
 
 const deals=read('app/ui/deals.tsx');
 assert.doesNotMatch(deals,/Waiting for CollabCy verification/);

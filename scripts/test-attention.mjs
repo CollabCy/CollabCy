@@ -17,7 +17,7 @@ const main=async()=>{
  const now=Date.now();
  const product=(over={})=>{
   const currentBid=over.currentBid??10,listingStartsAt=over.listingStartsAt??now-3600000,name=over.name||'Product';
-  return {id:over.id||`id-${name.toLowerCase()}`,brandId:over.brandId??'',brandName:over.brandName||`${name} Studio`,name,slug:over.slug||name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),logo:over.logo||name[0],color:over.color||'#3267e8',websiteUrl:over.websiteUrl||'https://example.com',description:over.description||`${name} description.`,category:over.category||'SaaS',tags:over.tags||[],currentBid,clickCount:over.clickCount??0,visitTimes:over.visitTimes||[],status:over.status||'active',listingStartsAt,listingEndsAt:over.listingEndsAt??now+7*86400000,bids:over.bids||[{id:`bid-${name}`,amount:currentBid,createdAt:over.lastBidAt??listingStartsAt}],campaign:over.campaign};
+  return {id:over.id||`id-${name.toLowerCase()}`,brandId:over.brandId??'',brandName:over.brandName||`${name} Studio`,name,slug:over.slug||name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),logo:over.logo||name[0],color:over.color||'#3267e8',websiteUrl:over.websiteUrl||'https://example.com',description:over.description||`${name} description.`,category:over.category||'SaaS',tags:over.tags||[],currentBid,clickCount:over.clickCount??0,visitTimes:over.visitTimes||[],status:over.status||'active',listingStartsAt,listingEndsAt:over.listingEndsAt??0,bids:over.bids||[{id:`bid-${name}`,amount:currentBid,createdAt:over.lastBidAt??listingStartsAt}],campaign:over.campaign};
  };
  const rankedThree=[product({id:'a',name:'fjrsj',slug:'fjrsj',currentBid:2000,listingStartsAt:now-90000}),product({id:'b',name:'TestProduct',slug:'testproduct',currentBid:50,listingStartsAt:now-60000}),product({id:'c',name:'LowBid',slug:'lowbid',currentBid:31,listingStartsAt:now-30000})];
  assert.deepEqual(m.getRankedProducts(rankedThree,now).map(p=>p.name),['fjrsj','TestProduct','LowBid']);
@@ -29,7 +29,7 @@ const main=async()=>{
  const products=[high,low,finance,stale,expired];
  assert.equal(m.getRankedProducts(products,now).length,4);
  assert.equal(m.getRankedProducts(products,now)[0].name,'High');
- assert.equal(m.getFilteredProducts(products,{query:'',category:'All',time:'48h'},now).length,3);
+ assert.equal(m.getFilteredProducts(products,{query:'',category:'All',time:'24h'},now).length,3);
  assert.equal(m.getFilteredProducts(products,{query:'finance',category:'All',time:'all'},now)[0].name,'Ledger');
  assert.equal(m.getFilteredProducts(products,{query:'unfindable',category:'All',time:'all'},now).length,0);
  assert.ok(m.getFilteredProducts(products,{query:'',category:'AI Tools',time:'all'},now).every(p=>p.category==='AI Tools'||p.tags.includes('AI Tools')));
@@ -41,7 +41,9 @@ const main=async()=>{
  assert.equal(m.validateBid(products,'product-2',5,now),'');
  assert.ok(m.validateBid(products,'product-archive',1000,now));
  assert.equal(m.validateBid(products,'product-1',1,now),'');
- assert.equal(m.getRankedProducts(products,now+8*86400000).length,0);
+ assert.equal(m.getRankedProducts(products,now+8*86400000).length,4);
+ assert.equal(m.getRankedProducts([product({listingEndsAt:now-1})],now).length,0);
+ assert.ok(m.isActive(product({listingEndsAt:0}),now+365*86400000));
  assert.equal(m.safeWebsite('javascript:alert(1)'),null);assert.equal(m.safeWebsite('https://user:password@example.com'),null);
  assert.equal(m.safeWebsite('ftp://example.com'),null);assert.equal(m.safeWebsite('data:text/html,hi'),null);assert.equal(m.safeWebsite('file:///tmp/x'),null);
  assert.equal(m.safeWebsite('https://localhost'),null);assert.equal(m.safeWebsite('https://example.com'),'https://example.com/');
@@ -58,8 +60,7 @@ const main=async()=>{
  assert.equal(pay.parseCheckoutBody({product_id:'11111111-1111-4111-8111-111111111111',increment:1}).error,'Enter at least $2.');
  assert.ok(pay.browserReturnDoesNotApplyBid('1'));
  assert.equal(pay.checkoutReturnPath('fjrsj'),'/discover/product/fjrsj?paid=1');
- assert.match(pay.bidLoginPath('fjrsj',5),/^\/login\/5221\?next=/);
- assert.ok(!pay.bidLoginPath('fjrsj',5).startsWith('/login?'));
+ assert.equal(typeof pay.bidLoginPath,'undefined');
  assert.equal(pay.isPaymentSucceededEvent('payment.succeeded'),true);
  assert.equal(pay.isPaymentSucceededEvent('payment.processing'),false);
  assert.equal(pay.fulfillmentAction({eventType:'payment.processing',paymentStatus:'pending',webhookId:'wh_1',existingWebhookId:null,dodoPaymentId:'pay_1',existingDodoPaymentId:null,amountCents:500,paidAmount:500,currency:'USD',metadataMatch:true}),'ignore_event');
@@ -67,8 +68,10 @@ const main=async()=>{
  assert.equal(pay.fulfillmentAction({eventType:'payment.succeeded',paymentStatus:'paid',webhookId:'wh_2',existingWebhookId:'wh_1',dodoPaymentId:'pay_1',existingDodoPaymentId:'pay_1',amountCents:500,paidAmount:500,currency:'USD',metadataMatch:true}),'continue_apply');
  assert.equal(pay.fulfillmentAction({eventType:'payment.succeeded',paymentStatus:'pending',webhookId:'wh_1',existingWebhookId:null,dodoPaymentId:'pay_1',existingDodoPaymentId:null,amountCents:500,paidAmount:400,currency:'USD',metadataMatch:true}),'reject_mismatch');
  assert.equal(pay.fulfillmentAction({eventType:'payment.succeeded',paymentStatus:'pending',webhookId:'wh_1',existingWebhookId:null,dodoPaymentId:'pay_1',existingDodoPaymentId:null,amountCents:500,paidAmount:500,currency:'USD',metadataMatch:true}),'mark_paid_and_apply');
- const meta=pay.checkoutMetadata({payment_id:'p',product_id:'prod',user_id:'u',increment:5});
+ const meta=pay.checkoutMetadata({payment_id:'p',product_id:'prod',increment:5});
  assert.equal(typeof meta.increment,'string');
+ assert.equal(meta.user_id,undefined);
+ assert.ok(pay.metadataMatchesPending({id:'p',user_id:null,product_id:'prod',increment:5},{payment_id:'p',product_id:'prod',increment:'5'}));
  assert.ok(v.validateAttentionListing({name:'X',websiteUrl:'javascript:alert(1)',description:'A product.',category:'SaaS',initialBid:10}));
  assert.ok(v.validateAttentionListing({name:'X',websiteUrl:'https://example.com',description:'A product.',category:'SaaS',initialBid:1}));
  assert.equal(v.validateAttentionListing({name:'X',websiteUrl:'https://example.com',description:'A product.',category:'SaaS',initialBid:2}),'');
@@ -86,7 +89,7 @@ const main=async()=>{
     const listingError=v.validateAttentionListing(listing);
     if(listingError)throw new Error(listingError);
     if(store.products.some(p=>p.name.toLowerCase()===listing.name.trim().toLowerCase()&&p.websiteUrl===listing.websiteUrl&&now-p.listingStartsAt<45000))throw new Error('This product was just listed. Please wait before listing it again.');
-    const created={id:`remote-${store.published.length+1}`,brandId:'',brandName:listing.brandName,name:listing.name,slug:listing.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'product',logo:listing.logo,color:'#3267e8',websiteUrl:listing.websiteUrl,description:listing.description,category:listing.category,tags:[],currentBid:listing.initialBid,clickCount:0,visitTimes:[],status:'active',listingStartsAt:now,listingEndsAt:now+7*86400000,bids:[{id:`list-bid-${store.published.length+1}`,amount:listing.initialBid,createdAt:now}]};
+    const created={id:`remote-${store.published.length+1}`,brandId:'',brandName:listing.brandName,name:listing.name,slug:listing.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'product',logo:listing.logo,color:'#3267e8',websiteUrl:listing.websiteUrl,description:listing.description,category:listing.category,tags:[],currentBid:listing.initialBid,clickCount:0,visitTimes:[],status:'active',listingStartsAt:now,listingEndsAt:0,bids:[{id:`list-bid-${store.published.length+1}`,amount:listing.initialBid,createdAt:now}]};
     store.products=store.products.some(p=>p.id===created.id)?store.products.map(p=>p.id===created.id?created:p):[...store.products,created];
     store.activity=[{id:`list-${created.id}`,productId:created.id,type:'listing',createdAt:now},...store.activity];
     store.published.push(created.name);

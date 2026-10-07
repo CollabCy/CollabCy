@@ -41,10 +41,9 @@ export async function handleDodoWebhook(request: Request): Promise<Response> {
   }
 
   const paymentId = extracted.metadata.payment_id;
-  const userId = extracted.metadata.user_id;
   const productId = extracted.metadata.product_id;
   const increment = Number(extracted.metadata.increment);
-  if (!webhookId || !paymentId || !extracted.payment_id || !userId || !productId || !Number.isInteger(increment) || increment <= 0) {
+  if (!webhookId || !paymentId || !extracted.payment_id || !productId || !Number.isInteger(increment) || increment <= 0) {
     return Response.json({ error: "Invalid payment event." }, { status: 400 });
   }
   if (!paidAmountMatches(increment * 100, extracted.total_amount, extracted.currency)) {
@@ -59,7 +58,7 @@ export async function handleDodoWebhook(request: Request): Promise<Response> {
     p_webhook_id: webhookId,
     p_amount_cents: increment * 100,
     p_currency: extracted.currency.toUpperCase(),
-    p_user_id: userId,
+    p_user_id: null,
     p_product_id: productId,
     p_increment: increment,
   });

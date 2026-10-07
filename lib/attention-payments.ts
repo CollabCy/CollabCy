@@ -36,21 +36,14 @@ export function checkoutReturnPath(slug: string) {
   return `/discover/product/${encodeURIComponent(slug)}?paid=1`;
 }
 
-export function bidLoginPath(slug: string, increment: number) {
-  const next = `/discover/product/${encodeURIComponent(slug)}?bid=${increment}`;
-  return `/login/5221?next=${encodeURIComponent(next)}`;
-}
-
 export function checkoutMetadata(input: {
   payment_id: string;
   product_id: string;
-  user_id: string;
   increment: number;
 }): Record<string, string> {
   return {
     payment_id: input.payment_id,
     product_id: input.product_id,
-    user_id: input.user_id,
     increment: String(input.increment),
   };
 }
@@ -101,7 +94,7 @@ export function rankingProductsFromRows(
       listingEndsAt: Number.isFinite(listingEndsAt) ? listingEndsAt : 0,
       bids: bid ? [bid] : [],
     };
-    if (now < product.listingStartsAt || now >= product.listingEndsAt) product.status = "expired";
+    if (now < product.listingStartsAt || (product.listingEndsAt > 0 && now >= product.listingEndsAt)) product.status = "expired";
     return product;
   });
 }
@@ -151,13 +144,15 @@ export function paidAmountMatches(amountCents: number, paidAmount: number, curre
 
 export function metadataMatchesPending(row: {
   id: string;
-  user_id: string;
+  user_id: string | null;
   product_id: string;
   increment: number;
 }, metadata: Record<string, string>) {
+  const metadataUser = metadata.user_id || null;
+  const rowUser = row.user_id || null;
   return (
     metadata.payment_id === row.id &&
-    metadata.user_id === row.user_id &&
+    metadataUser === rowUser &&
     metadata.product_id === row.product_id &&
     metadata.increment === String(row.increment)
   );

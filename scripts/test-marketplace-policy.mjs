@@ -46,12 +46,23 @@ assert.match(marketplace,/path==='\/brands'/);
 assert.match(marketplace,/login\?next=\$\{encodeURIComponent\(path\)\}/);
 assert.doesNotMatch(marketplace,/CreatorDiscovery publicView/);
 assert.doesNotMatch(marketplace,/BrandDiscovery publicView/);
-assert.match(marketplace,/if\(path==='\/discover'\)return <AttentionMarketplace\/>/);
+assert.match(marketplace,/if\(path==='\/'\)return <AttentionMarketplace\/>/);
+assert.match(marketplace,/if\(path==='\/discover'\)\{router\.replace\('\/'\);return\}/);
+assert.doesNotMatch(marketplace,/if\(path==='\/discover'\)return <AttentionMarketplace\/>/);
 assert.match(directories,/listPublicCreators/);
 assert.match(directories,/listPublicBrands/);
 assert.match(directories,/if\(!s\.session\)return/);
-assert.match(publicUi,/href="\/creators"/);
-assert.match(publicUi,/href="\/brands"/);
+const publicHeader=publicUi.slice(publicUi.indexOf('export function PublicHeader'),publicUi.indexOf('export function PublicFooter'));
+const publicFooter=publicUi.slice(publicUi.indexOf('export function PublicFooter'),publicUi.indexOf('export const faq'));
+assert.doesNotMatch(publicHeader,/href="\/creators"/);
+assert.doesNotMatch(publicHeader,/href="\/brands"/);
+assert.doesNotMatch(publicHeader,/href="\/login"/);
+assert.doesNotMatch(publicHeader,/href="\/signup"/);
+assert.match(publicHeader,/href="\/"/);
+assert.doesNotMatch(publicFooter,/href="\/creators"/);
+assert.doesNotMatch(publicFooter,/href="\/brands"/);
+assert.doesNotMatch(publicFooter,/href="\/login"/);
+assert.doesNotMatch(publicFooter,/href="\/signup"/);
 
 // C. Verification
 assert.match(sql,/create table if not exists public\.creator_verification_requests/);
@@ -101,4 +112,4 @@ assert.doesNotMatch(client,/demoDeals/);
 assert.match(data,/profiles_one_identity|canonicalMarketplaceRole/);
 assert.match(auth,/One email can be a Brand or a Creator, not both/);
 
-console.log('PASS: marketplace policy — free campaign listing, login-required directories, creator verification, same-role networking, Attention Marketplace unchanged.');
+console.log('PASS: marketplace policy — free campaign listing, login-required directories, creator verification, same-role networking, Attention Marketplace at /.');

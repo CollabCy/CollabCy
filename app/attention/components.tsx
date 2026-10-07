@@ -5,11 +5,8 @@ import {ArrowUpRight,ArrowRight,ArrowUp,Users,ChartNoAxesColumnIncreasing,Zap,Or
 import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/ui/dialog';
 import {Button,Field,DemoNote} from '../ui/shared';
 import {useAttention} from './store';
-import {useStore} from '../store';
 import {getRankedProducts,getMarketplaceStats,getMinimumBidForPosition,getProjectedRank,isActive,timeAgo,validateBid,safeWebsite,websiteHost,type Product,type ActivityEvent} from './model';
 import {money,compact} from '../data';
-import {getSupabase} from '@/lib/supabase';
-import {bidLoginPath} from '@/lib/attention-payments';
 
 export function ProductLogo({product,small=false}:{product:Product;small?:boolean}){
   return <span className={`attention-logo ${small?'small':''}`} style={{background:product.color}}>{product.logo.startsWith('data:image/')?<img src={product.logo} alt=""/>:product.logo==='orbit'?<Orbit/>:product.logo==='frame'?<Command/>:product.logo.slice(0,1)}</span>;
@@ -30,7 +27,7 @@ export function ModeSwitch({discover=false}:{discover?:boolean}){
       <span className="mode-icon"><Users/></span>
       <span><strong>COLLABORATE <em className="mode-preview">Preview</em></strong><small>Work with creators & brands</small></span>
     </Link>
-    <Link href="/discover" aria-current={discover?'page':undefined}>
+    <Link href="/" aria-current={discover?'page':undefined}>
       <span className="mode-icon"><ChartNoAxesColumnIncreasing/></span>
       <span><strong>DISCOVER <em><i/>LIVE</em></strong><small>Explore the attention marketplace</small></span>
     </Link>
@@ -59,7 +56,7 @@ export function AttentionEntry(){
         {leader?<div className="banner-leader"><ProductLogo product={leader}/><div><span className="banner-label"><i/>LIVE ON COLLABCY</span><strong>#1 spot <ArrowRight size={17}/> {leader.name}</strong><small>{money(leader.currentBid)} current bid · {leader.clickCount} visits</small></div></div>:<div><strong>Your product could be first.</strong></div>}
         <div className="banner-movement"><ArrowUp className="movement-icon"/><div className="banner-cycle" key={event?.id}><span className="banner-label">LATEST ACTIVITY</span><strong>{moved?.name||'The marketplace'} {event?.type==='listing'?'just joined':'placed a bid'}</strong><small>{event?.amount?`${money(event.amount)} bid`:'Discover something new'}</small></div></div>
         <div className="banner-community"><span className="mode-icon"><Users/></span><div><span className="banner-label">BRANDS ARE BIDDING</span><strong>{stats.activeProducts} active products</strong><small>Creators are discovering them</small></div></div>
-        <Link className="banner-explore" href="/discover"><Zap/><div><span className="banner-label">DISCOVER WHAT’S GETTING PROMOTED</span><strong>Explore the live marketplace <ArrowRight size={17}/></strong></div></Link>
+        <Link className="banner-explore" href="/"><Zap/><div><span className="banner-label">DISCOVER WHAT’S GETTING PROMOTED</span><strong>Explore the live marketplace <ArrowRight size={17}/></strong></div></Link>
       </div>
       <div className="attention-demo-line"><span>Attention Marketplace · Listings remain unpaid demo · Bids use Dodo Test Mode</span><button onClick={()=>setPaused(v=>!v)} aria-pressed={paused}>{paused?'Resume motion':'Pause motion'}</button></div>
     </div>
@@ -144,11 +141,10 @@ export function VisitDialog({productId,onClose,onBid}:{productId:string|null;onC
 export function ProductMetrics({product:p}:{product:Product}){
   const {state}=useAttention();
   const rank=getRankedProducts(state.products).findIndex(x=>x.id===p.id)+1;
-  return <div className="product-metrics"><div><strong>{money(p.currentBid)}</strong><small>Current bid</small></div><div><strong>{rank?`#${rank}`:'Expired'}</strong><small>Position</small></div><div><strong>{p.clickCount}</strong><small>Visits</small></div><div><strong>{timeAgo(p.bids[0]?.createdAt||p.listingStartsAt)}</strong><small>Last bid</small></div></div>;
+  return <div className="product-metrics"><div><strong>{money(p.currentBid)}</strong><small>Current bid</small></div><div><strong>{rank===1?'#1':rank?`#${rank}`:'Expired'}</strong><small>{rank===1?'Crown Jewel':'Position'}</small></div><div><strong key={p.clickCount}>{p.clickCount}</strong><small>Website clicks</small></div><div><strong>{timeAgo(p.bids[0]?.createdAt||p.listingStartsAt)}</strong><small>Last bid</small></div></div>;
 }
 export function BidDialog({productId,onClose,initialIncrement}:{productId:string|null;onClose:()=>void;initialIncrement?:number}){
   const {state}=useAttention();
-  const {s,go}=useStore();
   const p=state.products.find(p=>p.id===productId);
   const [step,setStep]=useState<'amount'|'review'>('amount'),[amount,setAmount]=useState(''),[error,setError]=useState('');
   const busy=useRef(false);
@@ -176,29 +172,15 @@ export function BidDialog({productId,onClose,initialIncrement}:{productId:string
   async function startCheckout(){
     if(!p||busy.current)return;
     if(!amount.trim()||validation){setError(!amount.trim()?'Enter your bid increase.':validation);return;}
-    if(!s.session){
-      go(bidLoginPath(p.slug,value));
-      return;
-    }
     busy.current=true;
     setError('');
     try{
-      const supabase=getSupabase();
-      const token=(await supabase?.auth.getSession())?.data.session?.access_token;
-      if(!token){
-        go(bidLoginPath(p.slug,value));
-        return;
-      }
       const response=await fetch('/api/attention/checkout',{
         method:'POST',
-        headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
+        headers:{'Content-Type':'application/json'},
         body:JSON.stringify({product_id:p.id,increment:value}),
       });
       const payload=await response.json().catch(()=>({})) as {checkout_url?:unknown;error?:unknown};
-      if(response.status===401){
-        go(bidLoginPath(p.slug,value));
-        return;
-      }
       if(!response.ok||typeof payload.checkout_url!=='string'||!payload.checkout_url){
         setError(typeof payload.error==='string'&&payload.error?payload.error:'Could not start checkout.');
         return;
@@ -210,7 +192,7 @@ export function BidDialog({productId,onClose,initialIncrement}:{productId:string
       busy.current=false;
     }
   }
-  return <MarketDialog returnFocusId={p?`bid-${p.id}`:undefined} open={!!p} onClose={onClose} title={step==='review'?'Review your bid':'Move into the spotlight.'} description={`Bid for ${p?.name||'a product'} · Sign in required`}>
+  return <MarketDialog returnFocusId={p?`bid-${p.id}`:undefined} open={!!p} onClose={onClose} title={step==='review'?'Review your bid':'Move into the spotlight.'} description={`Bid for ${p?.name||'a product'}`}>
     {p&&<>
       <div className="bid-product"><ProductLogo product={p} small/><div><strong>{p.name}</strong><span>{p.category}</span></div><a className="btn btn-secondary" href={safeWebsite(p.websiteUrl)||undefined} target="_blank" rel="noopener noreferrer">Visit website <ArrowUpRight size={14}/></a></div>
       <div className="bid-clear" aria-label="Current bid, your new bid, and required add-on">
@@ -230,7 +212,7 @@ export function BidDialog({productId,onClose,initialIncrement}:{productId:string
       <p className="bid-clear-note">Pay only the add-on through Dodo Test Mode checkout. Rankings update after payment is confirmed.</p>
       <div className="bid-progress"><span className={step==='amount'?'active':''}>1. Amount</span><span className={step==='review'?'active':''}>2. Review</span><span className={step==='review'?'active':''}>3. Dodo checkout</span></div>
       {step==='amount'
-        ? <form onSubmit={e=>{e.preventDefault();if(!s.session){if(!amount.trim()||validation){setError(!amount.trim()?'Enter your bid increase.':validation);return;}go(bidLoginPath(p.slug,value));return;}advance();}} noValidate>
+        ? <form onSubmit={e=>{e.preventDefault();advance();}} noValidate>
             <div className="bid-targets">
               <span>Target position <b>#{rank||rankNow||'—'}</b></span>
               {rankNow>1&&<span>Current leader <b>{money(getRankedProducts(state.products)[0]?.currentBid||0)}</b></span>}
@@ -238,7 +220,7 @@ export function BidDialog({productId,onClose,initialIncrement}:{productId:string
             <div className="bid-minimum"><TrendingUp size={18}/><span>Minimum add-on to improve position <strong>{min?money(Math.max(min,2)):'Listing expired'}</strong></span></div>
             <Field label="Your bid increase (USD)" type="number" min={paidMin} max={Math.max(paidMin,100000-p.currentBid)} step={1} value={amount} onChange={e=>{setAmount(e.target.value);setError('');}} placeholder={String(paidMin)} aria-describedby="bid-feedback" autoFocus/>
             <p id="bid-feedback" className={error?'attention-error':'bid-projection'} role="status">{error||(rank?`New cumulative bid ${money(nextBid)} · You will move to #${rank}.`:amount?validation:'Enter a whole-dollar increase to preview your position.')}</p>
-            <Button className="full-width" type="submit" disabled={!isActive(p)}>{s.session?`Continue · ${Number.isInteger(value)?money(value):money(paidMin)}`:'Sign in to place a bid'}<ArrowRight size={16}/></Button>
+            <Button className="full-width" type="submit" disabled={!isActive(p)}>Continue · {Number.isInteger(value)?money(value):money(paidMin)}<ArrowRight size={16}/></Button>
             <p className="bid-disclaimer"><Clock size={13}/>Rankings may change before payment is confirmed.</p>
           </form>
         : <>
@@ -254,10 +236,10 @@ export function BidDialog({productId,onClose,initialIncrement}:{productId:string
             {error&&<p className="attention-error" role="alert">{error}</p>}
             <div className="attention-dialog-actions">
               <Button variant="secondary" onClick={()=>setStep('amount')}>Edit bid</Button>
-              <Button onClick={()=>void startCheckout()}>{s.session?'Pay with Dodo':'Sign in to continue'}<ArrowRight size={16}/></Button>
+              <Button onClick={()=>void startCheckout()}>Pay with Dodo<ArrowRight size={16}/></Button>
             </div>
           </>}
-      <DemoNote>Paid bids require a CollabCy account and Dodo Test Mode checkout. The bid is applied only after Dodo confirms payment.</DemoNote>
+      <DemoNote>Bid increases use Dodo Test Mode checkout. The bid is applied only after Dodo confirms payment. Returning from checkout does not apply the bid by itself.</DemoNote>
     </>}
   </MarketDialog>;
 }
