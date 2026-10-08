@@ -19,3 +19,9 @@ export function validateBid(products:Product[],id:string,increment:number,now=Da
 export function timeAgo(timestamp:number,now=Date.now()){const hours=Math.max(0,Math.floor((now-timestamp)/3600000));return hours>=24?`${Math.floor(hours/24)}d ago`:hours?`${hours}h ago`:Math.max(0,Math.floor((now-timestamp)/60000))<1?'Just now':`${Math.floor((now-timestamp)/60000)}m ago`;}
 export function safeWebsite(value:string){try{if(typeof value!=='string'||value.length>2048)return null;const trimmed=value.trim();if(!trimmed||trimmed.length>2048||/\s/.test(trimmed))return null;const u=new URL(trimmed);const host=u.hostname.toLowerCase();if(!['https:','http:'].includes(u.protocol)||u.username||u.password||!host)return null;if(host==='localhost'||host==='127.0.0.1'||host==='0.0.0.0'||host==='::1')return null;return u.href;}catch{return null;}}
 export function websiteHost(value:string){const href=safeWebsite(value);if(!href)return '';try{return new URL(href).hostname;}catch{return '';}}
+export function activityTickerText(event:ActivityEvent,productName:string){
+  if(event.type==='listing')return `${productName} joined`;
+  if(event.type==='visit')return `${productName} received a visit`;
+  if(event.rank)return `${productName} moved to #${event.rank}`;
+  return `${productName} updated bid`;
+}

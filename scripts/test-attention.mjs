@@ -62,6 +62,10 @@ const main=async()=>{
  assert.equal(m.safeWebsite('javascript:alert(1)'),null);assert.equal(m.safeWebsite('https://user:password@example.com'),null);
  assert.equal(m.safeWebsite('ftp://example.com'),null);assert.equal(m.safeWebsite('data:text/html,hi'),null);assert.equal(m.safeWebsite('file:///tmp/x'),null);
  assert.equal(m.safeWebsite('https://localhost'),null);assert.equal(m.safeWebsite('https://example.com'),'https://example.com/');
+ assert.equal(m.activityTickerText({type:'listing'},'ydtydyfdfu'),'ydtydyfdfu joined');
+ assert.equal(m.activityTickerText({type:'visit'},'boob'),'boob received a visit');
+ assert.equal(m.activityTickerText({type:'bid',rank:2},'hdeg'),'hdeg moved to #2');
+ assert.equal(m.activityTickerText({type:'bid'},'takeme'),'takeme updated bid');
  assert.equal(v.isAttentionProductId('not-a-uuid'),false);assert.equal(v.isAttentionProductId(''),false);
  assert.equal(v.isAttentionProductId('11111111-1111-4111-8111-111111111111'),true);
  assert.equal(v.validateAttentionIncrement(0),'Enter a valid bid amount.');

@@ -1,9 +1,45 @@
 'use client';
-import {useEffect,useState} from 'react';
-import {Users,MousePointer2} from 'lucide-react';
+import {useEffect,useMemo,useState} from 'react';
+import {ArrowUpRight,Users,MousePointer2} from 'lucide-react';
 import {getSupabase} from '../../lib/supabase';
+import {activityTickerText,type ActivityEvent,type Product} from './model';
+import {useAttention} from './store';
+
+const TICKER_LIMIT=12;
+const TICKER_MS=4000;
+
+function recentTickerItems(activity:ActivityEvent[],products:Product[]){
+  const names=new Map(products.map(product=>[product.id,product.name]));
+  const items:{id:string;text:string}[]=[];
+  for(const event of activity){
+    const name=names.get(event.productId);
+    if(!name)continue;
+    items.push({id:event.id,text:activityTickerText(event,name)});
+    if(items.length>=TICKER_LIMIT)break;
+  }
+  return items;
+}
+
+function ActivityTicker({items}:{items:{id:string;text:string}[]}){
+  const newestId=items[0]?.id||'';
+  const [index,setIndex]=useState(0);
+  useEffect(()=>{setIndex(0);},[newestId]);
+  useEffect(()=>{
+    if(items.length<2)return;
+    const timer=window.setInterval(()=>setIndex(current=>(current+1)%items.length),TICKER_MS);
+    return()=>window.clearInterval(timer);
+  },[items.length,newestId]);
+  const item=items.length?items[index%items.length]:null;
+  return <span className="audience-ticker" aria-live="polite" aria-atomic="true" aria-label="Latest marketplace activity">
+    {item
+      ? <span className="audience-ticker-copy" key={`${item.id}:${index}`} title={item.text}><em>{item.text}</em><ArrowUpRight size={12} aria-hidden="true"/></span>
+      : <span className="audience-ticker-copy">Waiting for live activity…</span>}
+  </span>;
+}
 
 export function AudiencePulse(){
+  const {state}=useAttention();
+  const tickerItems=useMemo(()=>recentTickerItems(state.activity,state.products),[state.activity,state.products]);
   const [live,setLive]=useState<number|null>(null);
   const [total,setTotal]=useState<number|null>(null);
   const [online,setOnline]=useState(false);
@@ -80,9 +116,9 @@ export function AudiencePulse(){
     };
   },[]);
   return <div className="audience-pulse" aria-label="Marketplace audience">
-    <span><i/><strong key={live}>{live===null?'—':live}</strong> live {online?'now':'here'}</span>
-    <span><Users size={14}/><strong key={total}>{total===null?'—':total.toLocaleString()}</strong> visits in this browser</span>
-    <small>{online?'Live presence on this page':'Page presence in this browser'}</small>
+    <span className="audience-pulse-live"><i/><strong key={live}>{live===null?'—':live}</strong> live {online?'now':'here'}</span>
+    <ActivityTicker items={tickerItems}/>
+    <span className="audience-pulse-visits"><Users size={14}/><strong key={total}>{total===null?'—':total.toLocaleString()}</strong> visits in this browser</span>
   </div>;
 }
 

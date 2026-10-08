@@ -48,7 +48,7 @@ export function AttentionMarketplace({view='discover'}:{view?:'discover'|'listin
           <div className="attention-hero-grid">
             <div className="editorial-hero-copy">
               <div className="attention-eyebrow"><LiveBadge/><span>BRANDS ARE COMPETING FOR ATTENTION</span></div>
-              <h1>Your brand deserves<span>the spotlight.</span></h1>
+              <h1>Make your brand<span>standout</span></h1>
               <p>Big ideas deserve to be seen. Meet remarkable products, discover your next favorite, and put your brand in the spotlight.</p>
               <div className="hero-actions">
                 <button className="btn btn-primary spotlight-button" type="button" onClick={()=>setSpotlight(true)}><span>Spotlight your brand</span><ArrowRight size={17}/></button>
