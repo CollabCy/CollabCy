@@ -8,7 +8,7 @@ export function AudiencePulse(){
   const [total,setTotal]=useState<number|null>(null);
   const [online,setOnline]=useState(false);
   useEffect(()=>{
-    const id=crypto.randomUUID();
+    const tabId=crypto.randomUUID();
     let visitor:string;
     try{visitor=localStorage.getItem('collabcy-visitor')||crypto.randomUUID();localStorage.setItem('collabcy-visitor',visitor);}catch{visitor=crypto.randomUUID();}
     try{
@@ -23,40 +23,60 @@ export function AudiencePulse(){
     const peers=new Map<string,number>();
     const bc=typeof BroadcastChannel!=='undefined'?new BroadcastChannel('collabcy-audience'):null;
     let remoteLive=false;
-    const ping=()=>{
-      peers.set(id,Date.now());
-      bc?.postMessage({id,at:Date.now()});
+    const localCount=()=>{
       for(const [key,at] of peers)if(Date.now()-at>18000)peers.delete(key);
-      if(!remoteLive)setLive(peers.size);
+      return Math.max(1,peers.size);
+    };
+    const ping=()=>{
+      peers.set(tabId,Date.now());
+      bc?.postMessage({id:tabId,at:Date.now()});
+      if(!remoteLive)setLive(localCount());
     };
     if(bc)bc.onmessage=e=>{
       if(typeof e.data?.id!=='string')return;
       if(e.data.left)peers.delete(e.data.id);
       else if(typeof e.data.at==='number')peers.set(e.data.id,e.data.at);
-      if(!remoteLive)setLive(peers.size);
+      if(!remoteLive)setLive(localCount());
     };
     ping();
     const timer=setInterval(ping,5000);
     const client=getSupabase();
-    const channel=client?.channel('collabcy-public-audience',{config:{presence:{key:visitor}}});
-    channel?.on('presence',{event:'sync'},()=>{
+    const channel=client?.channel('collabcy-public-audience',{config:{presence:{key:tabId}}});
+    const syncLive=()=>{
+      if(!channel)return;
       const count=Object.keys(channel.presenceState()).length;
       remoteLive=true;
-      setLive(count);
+      setLive(Math.max(1,count));
       setOnline(true);
-    }).subscribe(status=>{
-      if(status==='SUBSCRIBED')void channel.track({joinedAt:Date.now()});
-      else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
-        remoteLive=false;
-        setOnline(false);
-        setLive(peers.size);
+    };
+    channel?.on('presence',{event:'sync'},syncLive)
+      .on('presence',{event:'join'},syncLive)
+      .on('presence',{event:'leave'},syncLive)
+      .subscribe(status=>{
+        if(status==='SUBSCRIBED')void channel.track({tab:tabId,visitor,joinedAt:Date.now()});
+        else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
+          remoteLive=false;
+          setOnline(false);
+          setLive(localCount());
+        }
+      });
+    const onHide=()=>{
+      if(document.visibilityState==='hidden'){
+        if(channel)void channel.untrack();
+      }else if(channel){
+        void channel.track({tab:tabId,visitor,joinedAt:Date.now()});
       }
-    });
+    };
+    document.addEventListener('visibilitychange',onHide);
     return()=>{
       clearInterval(timer);
-      bc?.postMessage({id,left:true});
+      document.removeEventListener('visibilitychange',onHide);
+      bc?.postMessage({id:tabId,left:true});
       bc?.close();
-      if(channel&&client)void client.removeChannel(channel);
+      if(channel){
+        void channel.untrack();
+        if(client)void client.removeChannel(channel);
+      }
     };
   },[]);
   return <div className="audience-pulse" aria-label="Marketplace audience">

@@ -19,8 +19,8 @@ export function validatePaidBidIncrement(increment: number) {
 
 export function parseCheckoutBody(body: unknown): { product_id: string; increment: number } | { error: string } {
   if (!body || typeof body !== "object") return { error: "Enter a valid bid amount." };
-  const value = body as { product_id?: unknown; increment?: unknown; user_id?: unknown; amount?: unknown; amount_cents?: unknown };
-  if ("user_id" in value || "amount" in value || "amount_cents" in value) {
+  const value = body as { product_id?: unknown; increment?: unknown; user_id?: unknown; amount?: unknown; amount_cents?: unknown; listing?: unknown };
+  if ("user_id" in value || "amount" in value || "amount_cents" in value || "listing" in value) {
     return { error: "Enter a valid bid amount." };
   }
   if (typeof value.product_id !== "string" || !isAttentionProductId(value.product_id)) {
@@ -32,8 +32,56 @@ export function parseCheckoutBody(body: unknown): { product_id: string; incremen
   return { product_id: value.product_id, increment };
 }
 
+export type ListingCheckoutFields = {
+  name: string;
+  websiteUrl: string;
+  description: string;
+  category: string;
+  logo?: string;
+  brandName?: string;
+};
+
+export function parseListingCheckoutBody(body: unknown): { listing: ListingCheckoutFields; increment: number } | { error: string } {
+  if (!body || typeof body !== "object") return { error: "Enter a valid bid amount." };
+  const value = body as {
+    listing?: unknown;
+    increment?: unknown;
+    initial_bid?: unknown;
+    product_id?: unknown;
+    user_id?: unknown;
+    amount?: unknown;
+    amount_cents?: unknown;
+  };
+  if ("user_id" in value || "amount" in value || "amount_cents" in value || "product_id" in value) {
+    return { error: "Enter a valid bid amount." };
+  }
+  if (!value.listing || typeof value.listing !== "object") {
+    return { error: "Add a product name, description, category, and valid website." };
+  }
+  const listing = value.listing as Record<string, unknown>;
+  const incrementSource = value.increment ?? value.initial_bid ?? listing.initialBid ?? listing.initial_bid;
+  const increment = typeof incrementSource === "number" ? incrementSource : Number(incrementSource);
+  const incrementError = validatePaidBidIncrement(increment);
+  if (incrementError) return { error: incrementError };
+  return {
+    listing: {
+      name: typeof listing.name === "string" ? listing.name : "",
+      websiteUrl: typeof listing.websiteUrl === "string" ? listing.websiteUrl : typeof listing.website_url === "string" ? listing.website_url : "",
+      description: typeof listing.description === "string" ? listing.description : "",
+      category: typeof listing.category === "string" ? listing.category : "",
+      logo: typeof listing.logo === "string" ? listing.logo : undefined,
+      brandName: typeof listing.brandName === "string" ? listing.brandName : typeof listing.brand_name === "string" ? listing.brand_name : undefined,
+    },
+    increment,
+  };
+}
+
 export function checkoutReturnPath(slug: string) {
   return `/discover/product/${encodeURIComponent(slug)}?paid=1`;
+}
+
+export function listingCheckoutReturnPath() {
+  return "/?paid=1";
 }
 
 export function checkoutMetadata(input: {

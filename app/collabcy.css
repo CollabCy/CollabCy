@@ -368,6 +368,7 @@ button:focus-visible,a:focus-visible { outline: 3px solid #b52b64; outline-offse
 .bid-minimum { background: #fbedf5; color: #975675; }
 .bid-minimum strong { color: #a03367; }
 .bid-projection { color: #a24570; }
+.bid-recommend { margin: 0 0 4px; font-size: 13px; color: #a03367; }
 .demo-payment,.attention-opportunity { background: #fbf0f6; border-color: #ecd5e2; color: #a6537c; }
 .demo-payment p,.attention-opportunity p { color: #906e81; }
 .attention-opportunity>span { color: #a97490; }

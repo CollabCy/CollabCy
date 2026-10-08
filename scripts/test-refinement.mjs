@@ -9,38 +9,18 @@ const marketplace=read('app/marketplace.tsx');
 assert.doesNotMatch(marketplace,/startDemo/);
 assert.doesNotMatch(marketplace,/Creator demo/);
 assert.doesNotMatch(marketplace,/Brand demo/);
-assert.doesNotMatch(marketplace,/Explore sample workspaces/);
-assert.doesNotMatch(marketplace,/>PREVIEW</);
-assert.match(marketplace,/AdminWorkspace/);
-assert.match(marketplace,/Your profile/);
-assert.match(marketplace,/Sign out/);
+assert.doesNotMatch(marketplace,/AdminWorkspace/);
+assert.doesNotMatch(marketplace,/Sign out/);
+assert.match(marketplace,/AttentionMarketplace/);
+assert.match(marketplace,/BrandProducts creating/);
 
-const auth=read('app/ui/auth.tsx');
-assert.doesNotMatch(auth,/Frontend preview\. No real account is created/);
-assert.doesNotMatch(auth,/Passwords are never stored or sent/);
-assert.doesNotMatch(auth,/Creator demo/);
-assert.doesNotMatch(auth,/preview terms/);
-assert.match(auth,/Terms of Service/);
-assert.match(auth,/Privacy Policy/);
-assert.match(auth,/terms-attention/);
-assert.match(auth,/signInWithPassword/);
-assert.match(auth,/signUp/);
-assert.match(auth,/Please tick this checkbox to continue/);
+const publicUi=read('app/ui/public.tsx');
+assert.doesNotMatch(publicUi,/I'm a creator/);
+assert.doesNotMatch(publicUi,/ComingSoon/);
+assert.match(publicUi,/Get Started/);
 
-const landing=read('app/ui/public.tsx');
-assert.doesNotMatch(landing,/Take a look around/);
-assert.match(landing,/Discover opportunities/);
-assert.match(landing,/className="demo-link" href="\/"/);
-
-const deals=read('app/ui/deals.tsx');
-assert.doesNotMatch(deals,/Waiting for CollabCy verification/);
-assert.match(deals,/CollabCy review required/);
-assert.match(deals,/fromPlatform/);
-assert.match(deals,/CollabCy Admin/);
-
-const dashboard=read('app/ui/dashboard.tsx');
-assert.doesNotMatch(dashboard,/Sample impressions/);
-assert.doesNotMatch(dashboard,/Simulated payments only/);
-assert.match(dashboard,/No live analytics yet/);
+const wizard=read('app/attention/spotlight-wizard.tsx');
+assert.match(wizard,/Claim your spotlight/);
+assert.doesNotMatch(wizard,/Launch your brand/);
 
 console.log('product refinement tests passed');

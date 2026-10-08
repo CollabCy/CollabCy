@@ -8,10 +8,10 @@ import {MIN_INITIAL_BID} from './model';
 
 const questions=[
   ['What is the Attention Marketplace?', 'A public board where brands list products for discovery. Visitors can browse listings, open product pages, and visit websites. Your cumulative bid determines your position among active products.'],
-  ['How much does it cost to list a product?', `Listing is free. Choose an initial bid from $${MIN_INITIAL_BID}. That starting bid is your listing’s current bid. No money is charged to publish a listing.`],
+  ['How much does it cost to list a product?', `There is no separate listing fee. You choose an initial spotlight bid from $${MIN_INITIAL_BID}. That amount is paid through Dodo, and it becomes your listing’s current bid after payment is confirmed.`],
   ['How does ranking work?', 'Products with higher current bids rank higher. When bids are equal, the earlier bid keeps its position. Ranking formulas are unchanged. Paid bid add-ons are applied after Dodo confirms payment in Test Mode.'],
-  ['Do I pay the full amount again to raise my bid?', 'You only pay the add-on. For example, moving from $2 to $5 means a $3 increment. Open Place a bid to see the minimum increase and projected rank, then pay that add-on through Dodo Test Mode checkout.'],
-  ['How do payments work?', 'New product listings are free and do not require a card. Bid increases use Dodo Payments in Test Mode. A bid updates only after payment confirmation; returning from checkout alone does not change your rank.'],
+  ['Do I pay the full amount again to raise my bid?', `You only pay the add-on. The minimum add-on is always $${MIN_INITIAL_BID}, even if a higher amount is recommended to reach #1. Open Place a bid to preview your projected rank, then pay the amount you enter through Dodo Test Mode checkout.`],
+  ['How do payments work?', `Your initial spotlight bid and later bid increases both use Dodo Payments in Test Mode. Rankings update only after payment confirmation; returning from checkout alone does not change your rank. There is no separate listing fee.`],
   ['Do I need an account to place a bid?', 'No. Browsing, visiting a website, listing a product, and placing a bid do not require a CollabCy account. Complete Dodo Test Mode checkout to pay the add-on. Returning from checkout is not proof of payment.'],
   ['Can I use the marketplace only for website visits?', 'Yes. Attention Marketplace listings are for product discovery, visibility, and website traffic.'],
   ['What is a sponsored spot?', 'A sponsored spot would be a separate advertising placement, rather than a position earned through leaderboard bids. Sponsored placements are not currently available on CollabCy.'],

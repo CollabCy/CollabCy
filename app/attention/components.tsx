@@ -1,11 +1,11 @@
 'use client';
 import {useEffect,useState,useRef,type ReactNode} from 'react';
 import Link from '../ui/app-link';
-import {ArrowUpRight,ArrowRight,ArrowUp,Users,ChartNoAxesColumnIncreasing,Zap,Orbit,Command,CheckCircle2,Globe,TrendingUp,Clock} from 'lucide-react';
+import {ArrowUpRight,ArrowRight,ChartNoAxesColumnIncreasing,Zap,Orbit,Command,CheckCircle2,Globe,TrendingUp,Clock} from 'lucide-react';
 import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/ui/dialog';
 import {Button,Field,DemoNote} from '../ui/shared';
 import {useAttention} from './store';
-import {getRankedProducts,getMarketplaceStats,getMinimumBidForPosition,getProjectedRank,isActive,timeAgo,validateBid,safeWebsite,websiteHost,type Product,type ActivityEvent} from './model';
+import {getRankedProducts,getMarketplaceStats,getProjectedRank,isActive,recommendedIncrementToLead,timeAgo,validateBid,safeWebsite,websiteHost,MIN_INITIAL_BID,type Product,type ActivityEvent} from './model';
 import {money,compact} from '../data';
 
 export function ProductLogo({product,small=false}:{product:Product;small?:boolean}){
@@ -19,50 +19,6 @@ export function lastBidAddOn(product:Product){
 }
 function previousBidForEvent(product:Product,event:ActivityEvent){
   return product.bids.find(bid=>bid.createdAt<event.createdAt)?.amount;
-}
-export function ModeSwitch({discover=false}:{discover?:boolean}){
-  return <nav className={`attention-modes ${discover?'discover-active':''}`} aria-label="Explore CollabCy">
-    <span className="attention-mode-indicator"/>
-    <Link href="/" aria-current={!discover?'page':undefined}>
-      <span className="mode-icon"><Users/></span>
-      <span><strong>COLLABORATE <em className="mode-preview">Preview</em></strong><small>Work with creators & brands</small></span>
-    </Link>
-    <Link href="/" aria-current={discover?'page':undefined}>
-      <span className="mode-icon"><ChartNoAxesColumnIncreasing/></span>
-      <span><strong>DISCOVER <em><i/>LIVE</em></strong><small>Explore the attention marketplace</small></span>
-    </Link>
-  </nav>;
-}
-export function AttentionEntry(){
-  const {state}=useAttention();
-  const ranked=getRankedProducts(state.products);
-  const stats=getMarketplaceStats(state.products);
-  const [index,setIndex]=useState(0),[paused,setPaused]=useState(false);
-  useEffect(()=>{
-    const motion=matchMedia('(prefers-reduced-motion: reduce)');
-    if(paused||motion.matches)return;
-    const t=setInterval(()=>setIndex(v=>v+1),6000);
-    const stop=()=>{if(motion.matches)clearInterval(t)};
-    motion.addEventListener('change',stop);
-    return()=>{clearInterval(t);motion.removeEventListener('change',stop)};
-  },[paused]);
-  const events=state.activity.filter(a=>ranked.some(p=>p.id===a.productId));
-  const event=events[index%Math.max(1,events.length)];
-  const moved=ranked.find(p=>p.id===event?.productId);
-  const leader=ranked[0];
-  return <section className={`attention-entry ${paused?'motion-paused':''}`} aria-label="Explore the attention marketplace">
-    <div className="public-container">
-      <div className="attention-banner">
-        {leader?<div className="banner-leader"><ProductLogo product={leader}/><div><span className="banner-label"><i/>LIVE ON COLLABCY</span><strong>#1 spot <ArrowRight size={17}/> {leader.name}</strong><small>{money(leader.currentBid)} current bid · {leader.clickCount} visits</small></div></div>:<div><strong>Your product could be first.</strong></div>}
-        <div className="banner-movement"><ArrowUp className="movement-icon"/><div className="banner-cycle" key={event?.id}><span className="banner-label">LATEST ACTIVITY</span><strong>{moved?.name||'The marketplace'} {event?.type==='listing'?'just joined':'placed a bid'}</strong><small>{event?.amount?`${money(event.amount)} bid`:'Discover something new'}</small></div></div>
-        <div className="banner-community"><span className="mode-icon"><Users/></span><div><span className="banner-label">BRANDS ARE BIDDING</span><strong>{stats.activeProducts} active products</strong><small>Creators are discovering them</small></div></div>
-        <Link className="banner-explore" href="/"><Zap/><div><span className="banner-label">DISCOVER WHAT’S GETTING PROMOTED</span><strong>Explore the live marketplace <ArrowRight size={17}/></strong></div></Link>
-      </div>
-      <div className="attention-demo-line"><span>Attention Marketplace · Listings remain unpaid demo · Bids use Dodo Test Mode</span><button onClick={()=>setPaused(v=>!v)} aria-pressed={paused}>{paused?'Resume motion':'Pause motion'}</button></div>
-    </div>
-    <div className="attention-marquee"><div className="marquee-track">{[0,1].map(copy=><div className="marquee-group" key={copy} aria-hidden={copy===1}>{ranked.map(p=><span key={p.id}><ProductLogo product={p} small/>{p.name}<b>·</b></span>)}</div>)}</div></div>
-    <div className="public-container"><p className="explore-label">EXPLORE COLLABCY</p><ModeSwitch/></div>
-  </section>;
 }
 function VisitSpark({products}:{products:Product[]}){
   const now=Date.now();
@@ -136,7 +92,7 @@ export function MarketDialog({open,onClose,title,description,children,returnFocu
 export function VisitDialog({productId,onClose,onBid}:{productId:string|null;onClose:()=>void;onBid:(id:string)=>void}){
   const {state,repository}=useAttention();
   const p=state.products.find(p=>p.id===productId);
-  return <MarketDialog returnFocusId={p?`visit-${p.id}`:undefined} open={!!p} onClose={onClose} title={p?.name||'Product information'} description={p?`By ${p.brandName}`:'Discover a product'}>{p&&<><div className="visit-intro"><ProductLogo product={p}/><p>{p.description}</p></div><div className="attention-tags"><span>{p.category}</span>{p.tags.map(t=><span key={t}>{t}</span>)}</div><ProductMetrics product={p}/><div className="visit-website"><Globe size={20}/><div><small>WEBSITE · DEMO DESTINATION</small><strong>{websiteHost(p.websiteUrl)}</strong></div><ArrowUpRight size={18}/></div>{p.campaign&&<div className="attention-opportunity"><span>OPTIONAL CREATOR OPPORTUNITY</span><strong>{p.campaign.title}</strong><p>Budget: {money(p.campaign.budget)}</p></div>}<div className="attention-dialog-actions"><a className="btn btn-primary" href={safeWebsite(p.websiteUrl)||undefined} target="_blank" rel="noopener noreferrer" onClick={()=>{void Promise.resolve(repository.simulateVisit(p.id)).catch(error=>{console.error('[attention]', error);});}}>Visit website <ArrowUpRight size={17}/></a><Button variant="secondary" disabled={!isActive(p)} onClick={()=>onBid(p.id)}>{isActive(p)?'Place bid':'Listing expired'}</Button></div><Link className="text-link" href={`/discover/product/${p.slug}`} onClick={onClose}>Product details & bid history <ArrowRight size={15}/></Link><DemoNote>Website visits stay open without an account. Placing a bid requires a signed-in Dodo Test Mode checkout.</DemoNote></>}</MarketDialog>;
+  return <MarketDialog returnFocusId={p?`visit-${p.id}`:undefined} open={!!p} onClose={onClose} title={p?.name||'Product information'} description={p?`By ${p.brandName}`:'Discover a product'}>{p&&<><div className="visit-intro"><ProductLogo product={p}/><p>{p.description}</p></div><div className="attention-tags"><span>{p.category}</span>{p.tags.map(t=><span key={t}>{t}</span>)}</div><ProductMetrics product={p}/><div className="visit-website"><Globe size={20}/><div><small>WEBSITE · DEMO DESTINATION</small><strong>{websiteHost(p.websiteUrl)}</strong></div><ArrowUpRight size={18}/></div>{p.campaign&&<div className="attention-opportunity"><span>OPTIONAL CREATOR OPPORTUNITY</span><strong>{p.campaign.title}</strong><p>Budget: {money(p.campaign.budget)}</p></div>}<div className="attention-dialog-actions"><a className="btn btn-primary" href={safeWebsite(p.websiteUrl)||undefined} target="_blank" rel="noopener noreferrer" onClick={()=>{void Promise.resolve(repository.simulateVisit(p.id)).catch(error=>{console.error('[attention]', error);});}}>Visit website <ArrowUpRight size={17}/></a><Button variant="secondary" disabled={!isActive(p)} onClick={()=>onBid(p.id)}>{isActive(p)?'Place bid':'Listing expired'}</Button></div><Link className="text-link" href={`/discover/product/${p.slug}`} onClick={onClose}>Product details & bid history <ArrowRight size={15}/></Link><DemoNote>Website visits stay open without an account. Placing a bid uses Dodo Test Mode checkout.</DemoNote></>}</MarketDialog>;
 }
 export function ProductMetrics({product:p}:{product:Product}){
   const {state}=useAttention();
@@ -148,22 +104,26 @@ export function BidDialog({productId,onClose,initialIncrement}:{productId:string
   const p=state.products.find(p=>p.id===productId);
   const [step,setStep]=useState<'amount'|'review'>('amount'),[amount,setAmount]=useState(''),[error,setError]=useState('');
   const busy=useRef(false);
-  const min=p?getMinimumBidForPosition(state.products,p.id):null;
-  const paidMin=min?Math.max(min,2):2;
+  const recommend=p?recommendedIncrementToLead(state.products,p.id):null;
   const rankNow=p?getRankedProducts(state.products).findIndex(item=>item.id===p.id)+1:0;
   useEffect(()=>{
     setStep('amount');
     setError('');
     busy.current=false;
-    const product=state.products.find(item=>item.id===productId);
-    const next=product?getMinimumBidForPosition(state.products,product.id):null;
-    const floor=next?Math.max(next,2):2;
-    setAmount(initialIncrement&&initialIncrement>=floor?String(initialIncrement):String(floor));
+    const suggested=initialIncrement&&initialIncrement>=MIN_INITIAL_BID?initialIncrement:MIN_INITIAL_BID;
+    setAmount(String(suggested));
   },[productId,initialIncrement]);
   const value=Number(amount);
   const nextBid=p&&Number.isInteger(value)?p.currentBid+value:NaN;
-  const validation=p?validateBid(state.products,p.id,value)||(Number.isInteger(value)&&value<2?'Enter at least $2.':''):'';
+  const validation=p?validateBid(state.products,p.id,value):'';
   const rank=p&&amount&&!validation?getProjectedRank(state.products,nextBid,p.id):null;
+  const leadCopy=p&&recommend!=null
+    ? rankNow===1
+      ? `You’re already #1. Minimum bid ${money(MIN_INITIAL_BID)}.`
+      : recommend===MIN_INITIAL_BID
+        ? `Add ${money(MIN_INITIAL_BID)} to reach #1`
+        : `Add ${money(recommend)} to reach #1`
+    : '';
   function advance(){
     if(!amount.trim()||validation){setError(!amount.trim()?'Enter your bid increase.':validation);return;}
     setError('');
@@ -205,8 +165,8 @@ export function BidDialog({productId,onClose,initialIncrement}:{productId:string
           <strong>{Number.isFinite(nextBid)?money(nextBid):'—'}</strong>
         </div>
         <div>
-          <small>REQUIRED ADD-ON</small>
-          <strong>{Number.isInteger(value)?`+${money(value)}`:`+${money(paidMin)}`}</strong>
+          <small>YOUR ADD-ON</small>
+          <strong>{Number.isInteger(value)?`+${money(value)}`:`+${money(MIN_INITIAL_BID)}`}</strong>
         </div>
       </div>
       <p className="bid-clear-note">Pay only the add-on through Dodo Test Mode checkout. Rankings update after payment is confirmed.</p>
@@ -214,13 +174,14 @@ export function BidDialog({productId,onClose,initialIncrement}:{productId:string
       {step==='amount'
         ? <form onSubmit={e=>{e.preventDefault();advance();}} noValidate>
             <div className="bid-targets">
-              <span>Target position <b>#{rank||rankNow||'—'}</b></span>
+              <span>Projected position <b>#{rank||rankNow||'—'}</b></span>
               {rankNow>1&&<span>Current leader <b>{money(getRankedProducts(state.products)[0]?.currentBid||0)}</b></span>}
             </div>
-            <div className="bid-minimum"><TrendingUp size={18}/><span>Minimum add-on to improve position <strong>{min?money(Math.max(min,2)):'Listing expired'}</strong></span></div>
-            <Field label="Your bid increase (USD)" type="number" min={paidMin} max={Math.max(paidMin,100000-p.currentBid)} step={1} value={amount} onChange={e=>{setAmount(e.target.value);setError('');}} placeholder={String(paidMin)} aria-describedby="bid-feedback" autoFocus/>
-            <p id="bid-feedback" className={error?'attention-error':'bid-projection'} role="status">{error||(rank?`New cumulative bid ${money(nextBid)} · You will move to #${rank}.`:amount?validation:'Enter a whole-dollar increase to preview your position.')}</p>
-            <Button className="full-width" type="submit" disabled={!isActive(p)}>Continue · {Number.isInteger(value)?money(value):money(paidMin)}<ArrowRight size={16}/></Button>
+            <div className="bid-minimum"><TrendingUp size={18}/><span>Minimum bid <strong>{money(MIN_INITIAL_BID)}</strong></span></div>
+            {leadCopy&&<p className="bid-recommend">{leadCopy}</p>}
+            <Field label="Your bid increase (USD)" type="number" min={MIN_INITIAL_BID} max={Math.max(MIN_INITIAL_BID,100000-p.currentBid)} step={1} value={amount} onChange={e=>{setAmount(e.target.value);setError('');}} placeholder={String(MIN_INITIAL_BID)} aria-describedby="bid-feedback" autoFocus/>
+            <p id="bid-feedback" className={error?'attention-error':'bid-projection'} role="status">{error||(rank?`At ${money(value)}, you'll move to #${rank}.` :amount?validation:'Enter a whole-dollar increase to preview your position.')}</p>
+            <Button className="full-width" type="submit" disabled={!isActive(p)}>Continue · {Number.isInteger(value)?money(value):money(MIN_INITIAL_BID)}<ArrowRight size={16}/></Button>
             <p className="bid-disclaimer"><Clock size={13}/>Rankings may change before payment is confirmed.</p>
           </form>
         : <>

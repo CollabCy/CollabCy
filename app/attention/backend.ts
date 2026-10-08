@@ -53,8 +53,7 @@ export function createAttentionBackend(): AttentionBackend {
         campaign: input.campaign,
       });
       if (result.skipped) throw new Error("Marketplace backend is not configured.");
-      if (result.error || !result.product) throw new Error(result.error || "Could not publish this listing.");
-      return result.product;
+      throw new Error(result.error || "Listings start through checkout.");
     },
     subscribe(onChange) {
       return subscribeToAttentionMarketplace(onChange);

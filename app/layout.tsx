@@ -4,8 +4,8 @@ import "./attention/attention.css";
 import "./collabcy.css";
 
 export const metadata: Metadata = {
-  title: "CollabCy — Where influence meets opportunity",
-  description: "Find your people. Build your next collaboration. A shared home for independent creators, ambitious brands, and products worth discovering.",
+  title: "CollabCy — Attention Marketplace",
+  description: "Discover independent brands and claim a spotlight. CollabCy ranks products by paid bids.",
   other: {
     "codex-preview": "development",
   },

@@ -23,12 +23,15 @@ export function usePromote(){
 
 export function AttentionMarketplace({view='discover'}:{view?:'discover'|'listings'}){
   const {state,repository}=useAttention();
+  const params=useSearchParams();
+  const paidReturn=params.get('paid')==='1';
   const promote=usePromote();
   const [filters,setFilters]=useState<MarketplaceFilters>({query:'',category:'All',time:'all'});
   const openWebsite=useWebsiteVisit();
   const [bid,setBid]=useState<string|null>(null);
   const [allActivity,setAllActivity]=useState(false);
   const [spotlight,setSpotlight]=useState(false);
+  useEffect(()=>{if(paidReturn)repository.refresh();},[paidReturn,repository]);
   const ranked=getRankedProducts(state.products);
   const filtered=getFilteredProducts(state.products,filters);
   const setCategory=(category:string)=>setFilters(v=>({...v,category}));
@@ -37,6 +40,7 @@ export function AttentionMarketplace({view='discover'}:{view?:'discover'|'listin
   return <>
     <PublicHeader/>
     <main className={`attention-page attention-editorial spotlight-page ${view==='listings'?'spotlight-listings':''}`}><div className="audience-dock public-container"><AudiencePulse/></div>
+      {paidReturn&&<div className="attention-success public-container" role="status"><h3>Checkout complete. Your spotlight is confirming.</h3><p>Returning from Dodo does not publish the listing or apply the bid by itself. Rankings update after payment is confirmed in Test Mode.</p></div>}
       {view==='listings'&&<div className="listing-scene" aria-hidden="true"><div className="listing-glow glow-pink"/><div className="listing-glow glow-gold"/><Crown className="listing-sky-crown" strokeWidth={1}/><div className="listing-royal-seal"><Crown size={90} strokeWidth={1}/><span>GOOD IDEAS<br/>DESERVE A SPOTLIGHT</span><Sparkles size={30}/></div>{[0,1,2,3,4,5].map(i=><span key={i} className={`listing-confetti confetti-${i}`}>{i%2?<Sparkles size={22} strokeWidth={1}/>:<i/>}</span>)}</div>}
       {view==='discover'&&<section className="attention-hero brands-hero-scene">
         <div className="brands-ambient" aria-hidden="true"><span className="brands-ambient-glow"/><Crown className="brands-ambient-crown" strokeWidth={1}/><Sparkles className="brands-ambient-star"/><i/><i/></div>
@@ -118,7 +122,7 @@ export function AttentionMarketplace({view='discover'}:{view?:'discover'|'listin
         </div>
         <div className="attention-steps">
           {[
-            {icon:Layers,title:'List your product',text:'Tell creators what you’re building. Your bid determines your ranking.'},
+            {icon:Layers,title:'List your product',text:'Introduce your product and pay the initial spotlight bid you choose. That bid determines your starting rank.'},
             {icon:TrendingUp,title:'Add to your bid',text:'Increase your position by paying only the add-on through Dodo Test Mode checkout. The bid is applied after payment is confirmed.'},
             {icon:Users,title:'Move up the ranking',text:'Climb as your cumulative bid grows.'},
             {icon:Trophy,title:'Get discovered',text:'Creators explore and find your product.'},
@@ -134,7 +138,7 @@ export function AttentionMarketplace({view='discover'}:{view?:'discover'|'listin
 
     </main>
     <PublicFooter/>
-    <Modal open={spotlight} onClose={()=>setSpotlight(false)} title="Your next moment in the spotlight" description="Introduce your brand, review your placement, and publish your listing." wide><div className="spotlight-form"><BrandProducts creating onCancel={()=>setSpotlight(false)}/></div></Modal>
+    <Modal open={spotlight} onClose={()=>setSpotlight(false)} title="Your next moment in the spotlight" description="Introduce your brand, choose your initial bid, and claim your spotlight." wide><div className="spotlight-form"><BrandProducts creating onCancel={()=>setSpotlight(false)}/></div></Modal>
 
     <BidDialog productId={bid} onClose={()=>setBid(null)}/>
   </>;
@@ -207,7 +211,7 @@ function HeroStage({products,loading}:{products:Product[];loading:boolean}){
 
 export function SpotlightAbout(){
   const promote=usePromote();
-  return <><PublicHeader/><main className="attention-editorial spotlight-page spotlight-about"><section className="public-container about-intro"><span className="editorial-kicker">A LITTLE ABOUT COLLABCY</span><h1>Great brands.<br/><span>Brighter possibilities.</span></h1><p>We believe the next great thing deserves a chance to be discovered. CollabCy brings independent brands, curious people, and ambitious creators together in one shared spotlight.</p><Link href="/listings" className="btn btn-primary spotlight-button">Find your next favorite <ArrowUpRight size={18}/></Link><div className="about-values"><article><GlobeIcon/><span>01 / DISCOVER</span><h2>Ideas worth your attention.</h2><p>Explore products across AI, design, developer tools, and beyond. Get to know the people and brands behind them.</p></article><article><Crown/><span>02 / STAND OUT</span><h2>A spotlight you can earn.</h2><p>Active products are ranked by their current bids. Higher bids move up; equal bids keep the earlier position.</p></article><article><Heart/><span>03 / CONNECT</span><h2>Your next favorite starts here.</h2><p>Visit a brand, explore its product, and discover something that fits the way you work and create.</p></article></div></section><section className="public-container about-process"><span className="editorial-kicker">YOUR BRAND’S NEXT CHAPTER</span><h2>From an idea to the spotlight.</h2><div className="about-process-steps"><p><b>01</b><strong>Introduce your brand</strong><span>Add your product name, description, website, and category.</span></p><p><b>02</b><strong>Choose your placement</strong><span>Review your initial bid and projected position.</span></p><p><b>03</b><strong>Make your debut</strong><span>Publish your listing and join the active product board.</span></p></div><div className="about-payment-note"><ShieldIcon/><p>Listing is free. Bid increases use Dodo Test Mode and update only after payment confirmation. Listings stay active until they are removed.</p></div><Button className="spotlight-button" onClick={promote}>Spotlight your brand <ArrowRight size={17}/></Button></section></main><PublicFooter/></>;
+  return <><PublicHeader/><main className="attention-editorial spotlight-page spotlight-about"><section className="public-container about-intro"><span className="editorial-kicker">A LITTLE ABOUT COLLABCY</span><h1>Great brands.<br/><span>Brighter possibilities.</span></h1><p>We believe the next great thing deserves a chance to be discovered. CollabCy brings independent brands, curious people, and ambitious creators together in one shared spotlight.</p><Link href="/listings" className="btn btn-primary spotlight-button">Find your next favorite <ArrowUpRight size={18}/></Link><div className="about-values"><article><GlobeIcon/><span>01 / DISCOVER</span><h2>Ideas worth your attention.</h2><p>Explore products across AI, design, developer tools, and beyond. Get to know the people and brands behind them.</p></article><article><Crown/><span>02 / STAND OUT</span><h2>A spotlight you can earn.</h2><p>Active products are ranked by their current bids. Higher bids move up; equal bids keep the earlier position.</p></article><article><Heart/><span>03 / CONNECT</span><h2>Your next favorite starts here.</h2><p>Visit a brand, explore its product, and discover something that fits the way you work and create.</p></article></div></section><section className="public-container about-process"><span className="editorial-kicker">YOUR BRAND’S NEXT CHAPTER</span><h2>From an idea to the spotlight.</h2><div className="about-process-steps"><p><b>01</b><strong>Introduce your brand</strong><span>Add your product name, description, website, and category.</span></p><p><b>02</b><strong>Choose your placement</strong><span>Review your initial bid and projected position.</span></p><p><b>03</b><strong>Claim your spotlight</strong><span>Pay your initial bid through Dodo. The listing goes live after payment is confirmed.</span></p></div><div className="about-payment-note"><ShieldIcon/><p>There is no separate listing fee. Your initial spotlight bid is paid through Dodo Test Mode and goes live after payment confirmation. Listings stay active until they are removed.</p></div><Button className="spotlight-button" onClick={promote}>Spotlight your brand <ArrowRight size={17}/></Button></section></main><PublicFooter/></>;
 }
 
 function ClaimSpot({leader,onBid,onList}:{leader:Product|undefined;onBid:()=>void;onList:()=>void}){
