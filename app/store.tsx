@@ -3,10 +3,10 @@ import React,{createContext,useContext} from 'react';
 import {useRouter} from 'next/navigation';
 import {toInAppPath} from '@/lib/app-origin';
 
-type NavState={session:false;role:'';onboarded:false;profile:{name:string};platformVerifier:false};
+type NavState={profile:{name:string}};
 type Store={s:NavState;ready:true;go:(path:string)=>void};
 const Context=createContext<Store>(null!);
-const empty:NavState={session:false,role:'',onboarded:false,profile:{name:''},platformVerifier:false};
+const empty:NavState={profile:{name:''}};
 
 export function StoreProvider({children}:{children:React.ReactNode}){
   const router=useRouter();

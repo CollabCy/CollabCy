@@ -1,8 +1,7 @@
 /**
  * In-app navigation must stay on the current origin.
  * Absolute hosts (including production) are stripped down to path + search + hash.
- * Auth callbacks keep window.location.origin so local and production OAuth
- * continue to use whichever origin the user is actually on.
+ * Never rewrite to a configured production URL; stay on window.location.origin.
  */
 
 export function toInAppPath(href: string): string {
@@ -15,17 +14,4 @@ export function toInAppPath(href: string): string {
   } catch {
     return "/";
   }
-}
-
-export function sanitizeNextParam(next?: string | null): string | null {
-  if (next == null || next === "") return null;
-  if (next === "promote") return "promote";
-  return toInAppPath(next);
-}
-
-/** Current origin for Supabase redirectTo. Never a configured production URL. */
-export function authRedirectUrl(path?: string): string {
-  if (typeof window === "undefined") return path ? toInAppPath(path) : "/";
-  if (!path || path === "/") return window.location.origin;
-  return `${window.location.origin}${toInAppPath(path)}`;
 }

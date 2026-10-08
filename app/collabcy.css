@@ -402,9 +402,6 @@ button:focus-visible,a:focus-visible { outline: 3px solid #b52b64; outline-offse
 .activity-row .status { font-size: 11px; }
 .profile-summary,.profile-main { border-radius: 17px; }
 .auth-form-wrap .or-divider span { font-size: 11px; color: #8f7582; }
-.google-auth-btn { margin-top: 12px; color: #373038; gap: 10px; }
-.google-auth-btn svg { width: 18px; height: 18px; }
-.google-auth-btn + .google-auth-btn { margin-top: 8px; }
 @media(max-width:1250px) and (min-width:1001px) {
   .attention-market-grid { grid-template-columns: minmax(0,1fr) 250px; gap: 18px; }
   .attention-product,.attention-board-cols { grid-template-columns: 36px 44px minmax(0,1fr) 96px 112px 72px; gap: 8px; }
