@@ -1,9 +1,10 @@
 'use client';
 import {useEffect,useMemo,useState} from 'react';
-import {ArrowUpRight,Users,MousePointer2} from 'lucide-react';
+import {ArrowUpRight,MousePointer2} from 'lucide-react';
 import {getSupabase} from '../../lib/supabase';
 import {activityTickerText,type ActivityEvent,type Product} from './model';
 import {useAttention} from './store';
+import {useSiteVisits} from './site-visits';
 
 const TICKER_LIMIT=12;
 const TICKER_MS=4000;
@@ -41,21 +42,12 @@ export function AudiencePulse(){
   const {state}=useAttention();
   const tickerItems=useMemo(()=>recentTickerItems(state.activity,state.products),[state.activity,state.products]);
   const [live,setLive]=useState<number|null>(null);
-  const [total,setTotal]=useState<number|null>(null);
+  const visits=useSiteVisits();
   const [online,setOnline]=useState(false);
   useEffect(()=>{
     const tabId=crypto.randomUUID();
     let visitor:string;
     try{visitor=localStorage.getItem('collabcy-visitor')||crypto.randomUUID();localStorage.setItem('collabcy-visitor',visitor);}catch{visitor=crypto.randomUUID();}
-    try{
-      let n=Number(localStorage.getItem('collabcy-preview-visits'))||0;
-      if(!sessionStorage.getItem('collabcy-preview-counted')){
-        n++;
-        localStorage.setItem('collabcy-preview-visits',String(n));
-        sessionStorage.setItem('collabcy-preview-counted','1');
-      }
-      setTotal(n);
-    }catch{setTotal(1);}
     const peers=new Map<string,number>();
     const bc=typeof BroadcastChannel!=='undefined'?new BroadcastChannel('collabcy-audience'):null;
     let remoteLive=false;
@@ -117,8 +109,8 @@ export function AudiencePulse(){
   },[]);
   return <div className="audience-pulse" aria-label="Marketplace audience">
     <span className="audience-pulse-live"><i/><strong key={live}>{live===null?'—':live}</strong> live {online?'now':'here'}</span>
+    <span className="audience-pulse-visits" title={visits.trackingBeganAt?`Site visits since ${new Date(visits.trackingBeganAt).toLocaleDateString()}. One visit per browser-tab session.`:'Site-wide tracking must be enabled before a lifetime count is available.'}><ArrowUpRight size={14}/><strong>{visits.status==='ready'&&visits.total!==null?BigInt(visits.total).toLocaleString():'—'}</strong><span>total visits in CollabCy{visits.status!=='ready'&&<small>{visits.status==='loading'?'Loading…':'Currently unavailable'}</small>}</span></span>
     <ActivityTicker items={tickerItems}/>
-    <span className="audience-pulse-visits"><Users size={14}/><strong key={total}>{total===null?'—':total.toLocaleString()}</strong> visits in this browser</span>
   </div>;
 }
 

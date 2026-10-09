@@ -10,6 +10,7 @@ import {AudiencePulse,BrandClicks} from './audience';
 import {BrandLink} from './brand-link';
 import {useWebsiteVisit} from './website-visit';
 import {ShareListing} from './share';
+import {marketplacePlacement} from './presentation';
 import {useStore} from '../store';
 import {money} from '../data';
 import {useAttention} from './store';
@@ -37,6 +38,7 @@ export function AttentionMarketplace({view='discover'}:{view?:'discover'|'listin
   const setCategory=(category:string)=>setFilters(v=>({...v,category}));
   const loading=repository.getStatus()==='loading';
   const leader=ranked[0];
+  const regular=filtered.filter(product=>product.id!==leader?.id);
   return <>
     <PublicHeader/>
     <main className={`attention-page attention-editorial spotlight-page ${view==='listings'?'spotlight-listings':''}`}><div className="audience-dock public-container"><AudiencePulse/></div>
@@ -60,7 +62,7 @@ export function AttentionMarketplace({view='discover'}:{view?:'discover'|'listin
                 <span><Heart size={15}/>Find your next favorite</span>
               </div>
             </div>
-            <HeroStage products={ranked.slice(0,4)} loading={loading}/>
+            <HeroStage products={ranked.slice(0,4)} loading={loading} onBid={setBid}/>
           </div>
         </div>
       </section>}
@@ -85,13 +87,14 @@ export function AttentionMarketplace({view='discover'}:{view?:'discover'|'listin
               </div>
               <CategoryChips value={filters.category} onChange={setCategory}/>
             </div>
+            {view==='listings'&&leader&&filtered.some(product=>product.id===leader.id)&&<CrownJewel product={leader} loading={loading} onBid={setBid}/>}
             {filtered.length
-              ? <div className={view==='listings'?'listing-directory':'attention-products'} role="list">
-                  {filtered.map(product=>{
-                    const rank=ranked.findIndex(item=>item.id===product.id)+1;
+              ? <><div className="regular-board-heading"><h3>Regular leaderboard</h3><span>Ranked independently of the Crown Jewel</span></div><div className={view==='listings'?'listing-directory':'attention-products'} role="list" aria-label="Regular leaderboard">
+                  {regular.map(product=>{
+                    const rank=marketplacePlacement(ranked,product.id).position;
                     return view==='listings'?<ListingRow key={product.id} product={product} rank={rank} onVisit={()=>openWebsite(product)} onBid={()=>setBid(product.id)}/>:<LeaderboardRow key={product.id} product={product} rank={rank} onVisit={()=>openWebsite(product)} onBid={()=>setBid(product.id)}/>;
                   })}
-                </div>
+                </div>{!regular.length&&<p className="regular-board-note">No regular listings match this view. The featured Crown Jewel has its own place above.</p>}</>
               : loading
                 ? view==='listings'?<div className="listing-loading" role="status" aria-label="Loading listings">{[0,1,2].map(i=><div className="listing-skeleton" key={i}><span/><div><b/><i/></div><em/></div>)}</div>:null
                 : !ranked.length
@@ -192,13 +195,13 @@ function Breadcrumb({name}:{name?:string}){
   </nav>;
 }
 
-function HeroStage({products,loading}:{products:Product[];loading:boolean}){
+function HeroStage({products,loading,onBid}:{products:Product[];loading:boolean;onBid:(id:string)=>void}){
   return <div className="spotlight-stage" aria-label="Top ranked products">
     <div className="spotlight-orbit orbit-one"/><div className="spotlight-orbit orbit-two"/>
     <span className="spotlight-star star-one"><Sparkles/></span><span className="spotlight-star star-two"><Sparkles size={16}/></span>
-    <div className="crown-jewel"><div className="crown-jewel-inner">{products[0]&&<BrandLink brandId={products[0].id} className="brand-card-link" href={`/discover/product/${products[0].slug}`} aria-label={`Open #1 ${products[0].name}`}/>}<span className="crown-jewel-icon"><Crown size={28} strokeWidth={1.5}/></span><div><small>THE CROWN JEWEL · #1</small><strong>{products[0]?<BrandLink brandId={products[0].id} href={`/discover/product/${products[0].slug}`}>{products[0].name}</BrandLink>:(loading?'Finding the standout…':'A place for something extraordinary.')}</strong><p>{products[0]?`${products[0].brandName} · ${money(products[0].currentBid)} leading bid`:'The brightest brand earns the crown.'}</p>{products[0]&&<BrandPageClicks product={products[0]}/>}</div>{products[0]&&<ShareListing product={products[0]}/>}</div></div>
-    <div className="spotlight-stage-label"><span/> THE ROYAL THREE</div>
-    {[0,1,2].map(index=>{const product=products[index+1];const rank=index+2;return <div key={product?.id||index} className={`royal-brand royal-brand-${index+1}`}>{product&&<BrandLink brandId={product.id} className="brand-card-link" href={`/discover/product/${product.slug}`} aria-label={`Open #${rank} ${product.name}`}/>}
+    <CrownJewel product={products[0]} loading={loading} onBid={onBid}/>
+    <div className="spotlight-stage-label"><span/> REGULAR LEADERBOARD · TOP THREE</div>
+    {[0,1,2].map(index=>{const product=products[index+1];const rank=index+1;return <div key={product?.id||index} className={`royal-brand royal-brand-${index+1}`}>{product&&<BrandLink brandId={product.id} className="brand-card-link" href={`/discover/product/${product.slug}`} aria-label={`Open regular leaderboard #${rank} ${product.name}`}/>}
 
       <span className="royal-position">#{rank}</span>
       {product?<ProductLogo product={product}/>:<span className="royal-placeholder"><Crown size={22}/></span>}
@@ -207,6 +210,15 @@ function HeroStage({products,loading}:{products:Product[];loading:boolean}){
     </div>})}
     <div className="royal-stage-foot"><TrendingUp size={14}/>Ranked live. Built to be discovered.</div>
   </div>;
+}
+
+export function CrownJewel({product,loading,onBid}:{product?:Product;loading:boolean;onBid:(id:string)=>void}){
+  const openWebsite=useWebsiteVisit();
+  return <section className="crown-jewel" aria-label="Crown Jewel featured category"><div className="crown-jewel-inner">
+    {product&&<BrandLink brandId={product.id} className="brand-card-link" href={`/discover/product/${product.slug}`} aria-label={`Open Crown Jewel #1 ${product.name}`}/>}
+    <span className="crown-product-identity">{product?<ProductLogo product={product}/>:<span className="crown-jewel-icon"><Sparkles size={24}/></span>}<span className="crown-decoration" aria-hidden="true"><Crown size={16}/></span></span>
+    <div><small>THE CROWN JEWEL · #1</small><strong>{product?<BrandLink brandId={product.id} href={`/discover/product/${product.slug}`}>{product.name}</BrandLink>:(loading?'Finding the standout…':'A place for something extraordinary.')}</strong><p>{product?`${product.brandName} · ${money(product.currentBid)} leading bid`:'The brightest brand earns the crown.'}</p>{product&&<BrandPageClicks product={product}/>}</div>
+    {product&&<div className="crown-actions"><Button id={`bid-${product.id}`} onClick={()=>onBid(product.id)} aria-label={`Place a bid for ${product.name}`}>Bid <TrendingUp size={13}/></Button><button type="button" id={`visit-${product.id}`} onClick={()=>openWebsite(product)} aria-label={`Visit ${product.name}`}>Visit <ArrowUpRight size={13}/></button><ShareListing product={product}/></div>}</div></section>;
 }
 
 export function SpotlightAbout(){
@@ -257,9 +269,9 @@ function ListingsEmpty({onList}:{onList:()=>void}){
   return <div className="listing-empty"><span className="listing-empty-crown"><Crown size={34} strokeWidth={1.4}/><Sparkles size={16}/></span><span className="listing-empty-eyebrow">THE NEXT GREAT THING COULD BE YOURS</span><h2>A little spotlight.<br/>A world of possibility.</h2><p>The board is ready for its first brand. Introduce what you’re building and claim your place from ${MIN_INITIAL_BID}.</p><Button className="spotlight-button" onClick={onList}><span>Spotlight your brand</span><ArrowUpRight size={17}/></Button><small>Stay listed · Listings from ${MIN_INITIAL_BID}</small></div>;
 }
 
-function ListingRow({product,rank,onVisit,onBid}:{product:Product;rank:number;onVisit:()=>void;onBid:()=>void}){
+export function ListingRow({product,rank,onVisit,onBid}:{product:Product;rank:number;onVisit:()=>void;onBid:()=>void}){
   return <article className={`listing-row${rank===1?' listing-row-leader':''}`} role="listitem" style={{animationDelay:`${Math.min(rank-1,8)*55}ms`}}>
-    <BrandLink brandId={product.id} className="brand-card-link" href={`/discover/product/${product.slug}`} aria-label={`Open ${product.name} details`}/><span className="listing-rank" aria-label={`Rank ${rank}`}>{rank===1?<Crown size={19} strokeWidth={1.6}/>:<>#{rank}</>}</span>
+    <BrandLink brandId={product.id} className="brand-card-link" href={`/discover/product/${product.slug}`} aria-label={`Open ${product.name} details`}/><span className="listing-rank" aria-label={`Regular leaderboard rank ${rank}`}>#{rank}</span>
     <BrandLink brandId={product.id} className="listing-logo-link" href={`/discover/product/${product.slug}`} aria-label={`View ${product.name}`}><ProductLogo product={product}/></BrandLink>
     <div className="listing-story"><div className="listing-story-title"><BrandLink brandId={product.id} href={`/discover/product/${product.slug}`}>{product.name}</BrandLink>{rank===1&&<span className="listing-leader-badge"><Sparkles size={10}/> IN THE SPOTLIGHT</span>}<span className="listing-category">{product.category}</span></div><p>{product.description}</p><span className="listing-host">{websiteHost(product.websiteUrl)}</span><BrandPageClicks product={product}/></div>
     <div className="listing-row-details"><button className="listing-bid" type="button" onClick={onBid} aria-label={`Raise bid for ${product.name}, current bid ${money(product.currentBid)}`} title="Raise this product’s bid">{money(product.currentBid)}<TrendingUp size={13}/></button><div className="listing-stats"><span>{timeAgo(product.listingStartsAt)}</span></div><div className="listing-row-social"><ShareListing product={product}/><button className="listing-visit" type="button" onClick={onVisit} aria-label={`Visit ${product.name}`}>Visit <ArrowUpRight size={13}/></button></div></div>
@@ -270,10 +282,10 @@ function BrandPageClicks({product}:{product:Product}){
   return <BrandClicks count={product.clickCount} kind="website"/>;
 }
 
-function LeaderboardRow({product,rank,onVisit,onBid}:{product:Product;rank:number;onVisit:()=>void;onBid:()=>void}){
+export function LeaderboardRow({product,rank,onVisit,onBid}:{product:Product;rank:number;onVisit:()=>void;onBid:()=>void}){
   return <article className={`attention-product brand-glass-card ${rank===1?'is-leader':''}`} role="listitem" style={{animationDelay:`${Math.min(rank,8)*65}ms`}}>
     <BrandLink brandId={product.id} className="brand-card-link" href={`/discover/product/${product.slug}`} aria-label={`Open ${product.name} details`}/>
-    <span className={`product-rank rank-${rank}`}>{rank===1?<Crown size={22}/>:<><small>#</small>{rank}</>}</span><ProductLogo product={product}/>
+    <span className={`product-rank rank-${rank}`} aria-label={`Regular leaderboard rank ${rank}`}><small>#</small>{rank}</span><ProductLogo product={product}/>
     <div className="product-story"><div className="product-story-top"><BrandLink brandId={product.id} href={`/discover/product/${product.slug}`}>{product.name}</BrandLink><span>{product.category}</span></div><p>{product.description}</p><BrandPageClicks product={product}/></div>
     <div className="brand-card-side"><div className="product-list-stat bid-stat"><strong>{money(product.currentBid)}</strong><small>Current bid</small></div><div className="brand-card-actions"><Button className="bid-cta" id={`bid-${product.id}`} onClick={onBid} aria-label={`Place a bid for ${product.name}`}>Bid <TrendingUp size={13}/></Button><button className="product-visit" type="button" id={`visit-${product.id}`} onClick={onVisit} aria-label={`Visit ${product.name}`}>Visit <ArrowUpRight size={13}/></button><ShareListing product={product}/></div></div>
   </article>;

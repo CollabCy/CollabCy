@@ -7,9 +7,12 @@ import {Button,Field,DemoNote} from '../ui/shared';
 import {useAttention} from './store';
 import {getRankedProducts,getMarketplaceStats,getProjectedRank,isActive,recommendedIncrementToLead,timeAgo,validateBid,safeWebsite,websiteHost,MIN_INITIAL_BID,type Product,type ActivityEvent} from './model';
 import {money,compact} from '../data';
+import {productLogoSource} from './presentation';
 
 export function ProductLogo({product,small=false}:{product:Product;small?:boolean}){
-  return <span className={`attention-logo ${small?'small':''}`} style={{background:product.color}}>{product.logo.startsWith('data:image/')?<img src={product.logo} alt=""/>:product.logo==='orbit'?<Orbit/>:product.logo==='frame'?<Command/>:product.logo.slice(0,1)}</span>;
+  const source=productLogoSource(product.logo);
+  const [failed,setFailed]=useState<string|null>(null);
+  return <span className={`attention-logo ${small?'small':''}`} style={{background:product.color}}>{source&&failed!==source?<img src={source} alt={`${product.name} logo`} onError={()=>setFailed(source)}/>:product.logo==='orbit'?<Orbit/>:product.logo==='frame'?<Command/>:<span aria-label={`${product.name} logo unavailable`}>{product.name.slice(0,1).toUpperCase()}</span>}</span>;
 }
 export function LiveBadge(){return <span className="attention-live"><i/>LIVE</span>;}
 export function lastBidAddOn(product:Product){
@@ -97,7 +100,7 @@ export function VisitDialog({productId,onClose,onBid}:{productId:string|null;onC
 export function ProductMetrics({product:p}:{product:Product}){
   const {state}=useAttention();
   const rank=getRankedProducts(state.products).findIndex(x=>x.id===p.id)+1;
-  return <div className="product-metrics"><div><strong>{money(p.currentBid)}</strong><small>Current bid</small></div><div><strong>{rank===1?'#1':rank?`#${rank}`:'Expired'}</strong><small>{rank===1?'Crown Jewel':'Position'}</small></div><div><strong key={p.clickCount}>{p.clickCount}</strong><small>Website clicks</small></div><div><strong>{timeAgo(p.bids[0]?.createdAt||p.listingStartsAt)}</strong><small>Last bid</small></div></div>;
+  return <div className="product-metrics"><div><strong>{money(p.currentBid)}</strong><small>Current bid</small></div><div><strong>{rank===1?'#1':rank?`#${rank-1}`:'Expired'}</strong><small>{rank===1?'Crown Jewel':'Regular leaderboard'}</small></div><div><strong key={p.clickCount}>{p.clickCount}</strong><small>Website clicks</small></div><div><strong>{timeAgo(p.bids[0]?.createdAt||p.listingStartsAt)}</strong><small>Last bid</small></div></div>;
 }
 export function BidDialog({productId,onClose,initialIncrement}:{productId:string|null;onClose:()=>void;initialIncrement?:number}){
   const {state}=useAttention();

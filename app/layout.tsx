@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./attention/attention.css";
 import "./collabcy.css";
+import {SiteVisitTracker} from './attention/site-visits';
 
 export const metadata: Metadata = {
   title: "CollabCy — Attention Marketplace",
@@ -22,7 +23,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased"><SiteVisitTracker/>{children}</body>
     </html>
   );
 }
