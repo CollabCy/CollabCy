@@ -82,6 +82,18 @@ const main=async()=>{
  assert.equal(m.safeWebsite('javascript:alert(1)'),null);assert.equal(m.safeWebsite('https://user:password@example.com'),null);
  assert.equal(m.safeWebsite('ftp://example.com'),null);assert.equal(m.safeWebsite('data:text/html,hi'),null);assert.equal(m.safeWebsite('file:///tmp/x'),null);
  assert.equal(m.safeWebsite('https://localhost'),null);assert.equal(m.safeWebsite('https://example.com'),'https://example.com/');
+ assert.equal(m.normalizeWebsiteInput('example.com'),'https://example.com');
+ assert.equal(m.normalizeWebsiteInput('www.example.com'),'https://www.example.com');
+ assert.equal(m.normalizeWebsiteInput('https://example.com'),'https://example.com');
+ assert.equal(m.normalizeWebsiteInput('http://example.com'),'http://example.com');
+ assert.equal(m.normalizeWebsiteInput(' https://example.com '),'https://example.com');
+ assert.equal(m.safeWebsite('example.com'),'https://example.com/');
+ assert.equal(m.safeWebsite('www.example.com'),'https://www.example.com/');
+ assert.equal(m.safeWebsite('http://example.com'),'http://example.com/');
+ assert.equal(m.safeWebsite('https://example.com'),'https://example.com/');
+ assert.ok(!String(m.safeWebsite('https://example.com')).includes('https://https://'));
+ assert.equal(m.safeWebsite('not a domain'),null);
+ assert.equal(m.safeWebsite(''),null);
  assert.equal(m.activityTickerText({type:'listing'},'ydtydyfdfu'),'ydtydyfdfu joined');
  assert.equal(m.activityTickerText({type:'visit'},'boob'),'boob received a visit');
  assert.equal(m.activityTickerText({type:'bid',rank:2},'hdeg'),'hdeg moved to #2');
@@ -99,6 +111,8 @@ const main=async()=>{
  assert.equal(pay.parseCheckoutBody({product_id:'11111111-1111-4111-8111-111111111111',increment:1}).error,'Enter at least $2.');
  assert.equal(pay.parseListingCheckoutBody({increment:15,listing:{name:'X',websiteUrl:'https://example.com',description:'A product.',category:'SaaS'}}).increment,15);
  assert.equal(pay.parseListingCheckoutBody({increment:2,listing:{name:'X',websiteUrl:'https://example.com',description:'A product.',category:'SaaS'}}).increment,2);
+ assert.equal(pay.parseListingCheckoutBody({increment:2,listing:{name:'X',websiteUrl:'example.com',description:'',category:'SaaS'}}).listing.websiteUrl,'https://example.com/');
+ assert.equal(pay.parseListingCheckoutBody({increment:2,listing:{name:'X',websiteUrl:'example.com',description:'',category:'SaaS'}}).listing.description,'');
  assert.equal(pay.parseListingCheckoutBody({product_id:'11111111-1111-4111-8111-111111111111',increment:15,listing:{name:'X'}}).error,'Enter a valid bid amount.');
  assert.equal(pay.listingCheckoutReturnPath(),'/?paid=1');
  assert.ok(pay.browserReturnDoesNotApplyBid('1'));
@@ -131,6 +145,10 @@ const main=async()=>{
  assert.ok(v.validateAttentionListing({name:'X',websiteUrl:'https://example.com',description:'A product.',category:'SaaS',initialBid:1}));
  assert.equal(v.validateAttentionListing({name:'X',websiteUrl:'https://example.com',description:'A product.',category:'SaaS',initialBid:2}),'');
  assert.equal(v.validateAttentionListing({name:'X',websiteUrl:'https://example.com',description:'A product.',category:'SaaS',initialBid:10}),'');
+ assert.equal(v.validateAttentionListing({name:'X',websiteUrl:'example.com',description:'',category:'SaaS',initialBid:2}),'');
+ assert.equal(v.validateAttentionListing({name:'X',websiteUrl:'www.example.com',description:'  ',category:'SaaS',initialBid:2}),'');
+ assert.ok(v.validateAttentionListing({name:'X',websiteUrl:'not a domain',description:'',category:'SaaS',initialBid:2}));
+ assert.ok(v.validateAttentionListing({name:'X',websiteUrl:'javascript:alert(1)',description:'',category:'SaaS',initialBid:2}));
 
  const noSeed=names=>assert.ok(names.every(name=>!DEMO_NAMES.includes(name)),`demo product leaked: ${names.join(',')}`);
  function memoryBackend(seedProducts=[],seedActivity=[]){
@@ -206,6 +224,9 @@ const main=async()=>{
  await guest.hydrate();
  assert.equal(guest.getProducts().length,0);
  const listed=await guest.createProduct({brandId:'should-not-own',brandName:'Guest Co',name:'TestProduct',logo:'T',websiteUrl:'https://example.com',description:'Listed without an account.',category:'Apps',initialBid:50});
+ const blankListed=createMarketplaceRepository().createProduct({brandId:'',brandName:'Guest Co',name:'NoDescProduct',logo:'N',websiteUrl:'example.com',description:'',category:'Apps',initialBid:2});
+ assert.equal(blankListed.description,'');
+ assert.equal(blankListed.websiteUrl,'https://example.com/');
  assert.equal(listed.brandId,'');assert.equal(listed.currentBid,50);assert.equal(persist.store.published.length,1);assert.equal(persist.store.products.length,1);
  await guest.hydrate();
  assert.equal(guest.getProducts().length,1);

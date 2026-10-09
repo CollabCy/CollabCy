@@ -1,5 +1,5 @@
 import { isAttentionProductId, validateAttentionIncrement } from "../app/attention/validation";
-import type { Bid, Product } from "../app/attention/model";
+import { safeWebsite, type Bid, type Product } from "../app/attention/model";
 
 export const ATTENTION_BID_CURRENCY = "USD";
 export const MIN_PAID_BID_INCREMENT = 2;
@@ -63,10 +63,11 @@ export function parseListingCheckoutBody(body: unknown): { listing: ListingCheck
   const increment = typeof incrementSource === "number" ? incrementSource : Number(incrementSource);
   const incrementError = validatePaidBidIncrement(increment);
   if (incrementError) return { error: incrementError };
+  const rawWebsite = typeof listing.websiteUrl === "string" ? listing.websiteUrl : typeof listing.website_url === "string" ? listing.website_url : "";
   return {
     listing: {
       name: typeof listing.name === "string" ? listing.name : "",
-      websiteUrl: typeof listing.websiteUrl === "string" ? listing.websiteUrl : typeof listing.website_url === "string" ? listing.website_url : "",
+      websiteUrl: safeWebsite(rawWebsite) || rawWebsite,
       description: typeof listing.description === "string" ? listing.description : "",
       category: typeof listing.category === "string" ? listing.category : "",
       logo: typeof listing.logo === "string" ? listing.logo : undefined,

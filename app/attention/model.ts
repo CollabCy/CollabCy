@@ -17,7 +17,14 @@ export function getFilteredProducts(products:Product[],filters:MarketplaceFilter
 export function getMarketplaceStats(products:Product[],now=Date.now()):MarketplaceStats{const active=getRankedProducts(products,now);const midnight=new Date(now);midnight.setHours(0,0,0,0);return {activeProducts:active.length,visitsToday:products.reduce((s,p)=>s+p.visitTimes.filter(t=>t>=midnight.getTime()&&t<=now).length,0),weeklyBids:products.reduce((s,p)=>s+p.bids.filter(b=>b.createdAt>=now-7*86400000&&b.createdAt<=now).reduce((n,b)=>n+b.amount,0),0)};}
 export function validateBid(products:Product[],id:string,increment:number,now=Date.now()){const p=products.find(p=>p.id===id);if(!p||!isActive(p,now))return 'This listing has expired and cannot receive bids.';if(!Number.isFinite(increment)||increment<=0)return 'Enter a valid bid amount.';if(!Number.isInteger(increment))return 'Use a whole-dollar amount.';if(increment<MIN_INITIAL_BID)return `Enter at least $${MIN_INITIAL_BID}.`;const nextBid=p.currentBid+increment;if(nextBid>100000)return 'Demo bids must be $100,000 or less.';return '';}
 export function timeAgo(timestamp:number,now=Date.now()){const hours=Math.max(0,Math.floor((now-timestamp)/3600000));return hours>=24?`${Math.floor(hours/24)}d ago`:hours?`${hours}h ago`:Math.max(0,Math.floor((now-timestamp)/60000))<1?'Just now':`${Math.floor((now-timestamp)/60000)}m ago`;}
-export function safeWebsite(value:string){try{if(typeof value!=='string'||value.length>2048)return null;const trimmed=value.trim();if(!trimmed||trimmed.length>2048||/\s/.test(trimmed))return null;const u=new URL(trimmed);const host=u.hostname.toLowerCase();if(!['https:','http:'].includes(u.protocol)||u.username||u.password||!host)return null;if(host==='localhost'||host==='127.0.0.1'||host==='0.0.0.0'||host==='::1')return null;return u.href;}catch{return null;}}
+export function normalizeWebsiteInput(value:string){
+  if(typeof value!=='string')return '';
+  const trimmed=value.trim();
+  if(!trimmed)return '';
+  if(/^[a-z][a-z0-9+.-]*:/i.test(trimmed))return trimmed;
+  return `https://${trimmed}`;
+}
+export function safeWebsite(value:string){try{if(typeof value!=='string'||value.length>2048)return null;const trimmed=normalizeWebsiteInput(value);if(!trimmed||trimmed.length>2048||/\s/.test(trimmed))return null;const u=new URL(trimmed);const host=u.hostname.toLowerCase();if(!['https:','http:'].includes(u.protocol)||u.username||u.password||!host)return null;if(host==='localhost'||host==='127.0.0.1'||host==='0.0.0.0'||host==='::1')return null;return u.href;}catch{return null;}}
 export function websiteHost(value:string){const href=safeWebsite(value);if(!href)return '';try{return new URL(href).hostname;}catch{return '';}}
 export function activityTickerText(event:ActivityEvent,productName:string){
   if(event.type==='listing')return `${productName} joined`;

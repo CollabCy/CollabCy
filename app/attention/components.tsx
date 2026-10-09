@@ -92,7 +92,7 @@ export function MarketDialog({open,onClose,title,description,children,returnFocu
 export function VisitDialog({productId,onClose,onBid}:{productId:string|null;onClose:()=>void;onBid:(id:string)=>void}){
   const {state,repository}=useAttention();
   const p=state.products.find(p=>p.id===productId);
-  return <MarketDialog returnFocusId={p?`visit-${p.id}`:undefined} open={!!p} onClose={onClose} title={p?.name||'Product information'} description={p?`By ${p.brandName}`:'Discover a product'}>{p&&<><div className="visit-intro"><ProductLogo product={p}/><p>{p.description}</p></div><div className="attention-tags"><span>{p.category}</span>{p.tags.map(t=><span key={t}>{t}</span>)}</div><ProductMetrics product={p}/><div className="visit-website"><Globe size={20}/><div><small>WEBSITE · DEMO DESTINATION</small><strong>{websiteHost(p.websiteUrl)}</strong></div><ArrowUpRight size={18}/></div>{p.campaign&&<div className="attention-opportunity"><span>OPTIONAL CREATOR OPPORTUNITY</span><strong>{p.campaign.title}</strong><p>Budget: {money(p.campaign.budget)}</p></div>}<div className="attention-dialog-actions"><a className="btn btn-primary" href={safeWebsite(p.websiteUrl)||undefined} target="_blank" rel="noopener noreferrer" onClick={()=>{void Promise.resolve(repository.simulateVisit(p.id)).catch(error=>{console.error('[attention]', error);});}}>Visit website <ArrowUpRight size={17}/></a><Button variant="secondary" disabled={!isActive(p)} onClick={()=>onBid(p.id)}>{isActive(p)?'Place bid':'Listing expired'}</Button></div><Link className="text-link" href={`/discover/product/${p.slug}`} onClick={onClose}>Product details & bid history <ArrowRight size={15}/></Link><DemoNote>Website visits stay open without an account. Placing a bid uses Dodo Test Mode checkout.</DemoNote></>}</MarketDialog>;
+  return <MarketDialog returnFocusId={p?`visit-${p.id}`:undefined} open={!!p} onClose={onClose} title={p?.name||'Product information'} description={p?`By ${p.brandName}`:'Discover a product'}>{p&&<><div className="visit-intro"><ProductLogo product={p}/><p>{p.description}</p></div><div className="attention-tags"><span>{p.category}</span>{p.tags.map(t=><span key={t}>{t}</span>)}</div><ProductMetrics product={p}/><div className="visit-website"><Globe size={20}/><div><small>WEBSITE · DEMO DESTINATION</small><strong>{websiteHost(p.websiteUrl)}</strong></div><ArrowUpRight size={18}/></div>{p.campaign&&<div className="attention-opportunity"><span>OPTIONAL CREATOR OPPORTUNITY</span><strong>{p.campaign.title}</strong><p>Budget: {money(p.campaign.budget)}</p></div>}<div className="attention-dialog-actions"><a className="btn btn-primary" href={safeWebsite(p.websiteUrl)||undefined} target="_blank" rel="noopener noreferrer" onClick={()=>{void Promise.resolve(repository.simulateVisit(p.id)).catch(error=>{console.error('[attention]', error);});}}>Visit website <ArrowUpRight size={17}/></a><Button variant="secondary" disabled={!isActive(p)} onClick={()=>onBid(p.id)}>{isActive(p)?'Place bid':'Listing expired'}</Button></div><Link className="text-link" href={`/discover/product/${p.slug}`} onClick={onClose}>Product details & bid history <ArrowRight size={15}/></Link><DemoNote>Website visits stay open without an account. Placing a bid uses Dodo Payments checkout.</DemoNote></>}</MarketDialog>;
 }
 export function ProductMetrics({product:p}:{product:Product}){
   const {state}=useAttention();
@@ -169,7 +169,7 @@ export function BidDialog({productId,onClose,initialIncrement}:{productId:string
           <strong>{Number.isInteger(value)?`+${money(value)}`:`+${money(MIN_INITIAL_BID)}`}</strong>
         </div>
       </div>
-      <p className="bid-clear-note">Pay only the add-on through Dodo Test Mode checkout. Rankings update after payment is confirmed.</p>
+      <p className="bid-clear-note">Pay only the add-on through Dodo Payments checkout. Rankings update after payment is confirmed.</p>
       <div className="bid-progress"><span className={step==='amount'?'active':''}>1. Amount</span><span className={step==='review'?'active':''}>2. Review</span><span className={step==='review'?'active':''}>3. Dodo checkout</span></div>
       {step==='amount'
         ? <form onSubmit={e=>{e.preventDefault();advance();}} noValidate>
@@ -191,16 +191,16 @@ export function BidDialog({productId,onClose,initialIncrement}:{productId:string
               <div><dt>Your add-on</dt><dd>{money(value)}</dd></div>
               <div><dt>New bid</dt><dd>{money(nextBid)} <small>new cumulative total</small></dd></div>
               <div><dt>Projected position</dt><dd>#{rank||'—'}</dd></div>
-              <div className="receipt-total"><dt>Test Mode payment</dt><dd>{money(value)}</dd></div>
+              <div className="receipt-total"><dt>Dodo Payments</dt><dd>{money(value)}</dd></div>
             </dl>
-            <div className="demo-payment"><CheckCircle2/><div><strong>Dodo Payments · Test Mode</strong><p>You will be redirected to Dodo to pay the add-on only. This is Test Mode billing, not live production charges. Returning to CollabCy does not apply the bid by itself.</p></div></div>
+            <div className="demo-payment"><CheckCircle2/><div><strong>Dodo Payments</strong><p>You will be redirected to Dodo Payments to pay the add-on only. Returning to CollabCy does not apply the bid by itself.</p></div></div>
             {error&&<p className="attention-error" role="alert">{error}</p>}
             <div className="attention-dialog-actions">
               <Button variant="secondary" onClick={()=>setStep('amount')}>Edit bid</Button>
               <Button onClick={()=>void startCheckout()}>Pay with Dodo<ArrowRight size={16}/></Button>
             </div>
           </>}
-      <DemoNote>Bid increases use Dodo Test Mode checkout. The bid is applied only after Dodo confirms payment. Returning from checkout does not apply the bid by itself.</DemoNote>
+      <DemoNote>Bid increases use Dodo Payments checkout. The bid is applied only after Dodo Payments confirms payment. Returning from checkout does not apply the bid by itself.</DemoNote>
     </>}
   </MarketDialog>;
 }

@@ -25,7 +25,7 @@ export function validateAttentionListing(input: {
 }) {
   const name = input.name.trim();
   const description = input.description.trim();
-  if (!name || name.length > 80 || !description || description.length > 500 || !attentionCategories.includes(input.category) || !safeWebsite(input.websiteUrl)) {
+  if (!name || name.length > 80 || description.length > 500 || !attentionCategories.includes(input.category) || !safeWebsite(input.websiteUrl)) {
     return 'Add a product name, description, category, and valid website.';
   }
   if (!Number.isInteger(input.initialBid) || input.initialBid < MIN_INITIAL_BID || input.initialBid > MAX_INITIAL_BID) {

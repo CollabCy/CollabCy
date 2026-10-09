@@ -10,7 +10,7 @@ import {MIN_INITIAL_BID} from '../attention/model';
 const faq=[
   ['What is the Attention Marketplace?', 'A public board where brands list products for discovery. Visitors can browse listings, open product pages, and visit websites. Your cumulative bid determines your position among active products.'],
   ['How much does it cost to list a product?', `There is no separate listing fee. You choose an initial spotlight bid from $${MIN_INITIAL_BID}. That amount is paid through Dodo, and it becomes your listing’s current bid after payment is confirmed.`],
-  ['How do payments work?', 'Your initial spotlight bid and later bid increases both use Dodo Payments in Test Mode. Rankings update only after payment confirmation; returning from checkout alone does not change your rank.'],
+  ['How do payments work?', 'Your initial spotlight bid and later bid increases both use Dodo Payments. Rankings update only after payment confirmation; returning from checkout alone does not change your rank.'],
   ['Do I need an account?', 'No. Browsing, visiting a website, listing a product, and placing a bid do not require a CollabCy account.'],
   ['How does ranking work?', 'Products with higher current bids rank higher. When bids are equal, the earlier bid keeps its position.'],
 ];
@@ -30,7 +30,7 @@ export function Help(){
       <Accordion type="single" collapsible>{items.map(([a,b],i)=><AccordionItem key={a} value={`${i}`}><AccordionTrigger>{a}</AccordionTrigger><AccordionContent>{b}</AccordionContent></AccordionItem>)}</Accordion>
       {!items.length&&<Empty title="No matching answers." description="Try a shorter keyword, such as bids or listings."/>}
     </section>
-    <section className="panel" id="trust"><h2>Built around clear expectations.</h2><p>The Attention Marketplace ranks products by paid bids. There is no separate listing fee. Returning from checkout does not apply a bid by itself.</p><DemoNote>Attention Marketplace bids use Dodo Test Mode checkout. Collaboration payouts are not part of CollabCy.</DemoNote></section>
+    <section className="panel" id="trust"><h2>Built around clear expectations.</h2><p>The Attention Marketplace ranks products by paid bids. There is no separate listing fee. Returning from checkout does not apply a bid by itself.</p><DemoNote>Attention Marketplace bids use Dodo Payments checkout. Collaboration payouts are not part of CollabCy.</DemoNote></section>
     <section className="panel" id="contact"><h2>Contact CollabCy</h2><p>Email <a href="mailto:admin@collabcy.app">admin@collabcy.app</a> for privacy questions, data deletion requests, or to report a marketplace or content concern.</p></section>
   </main><PublicFooter/></>;
 }
@@ -55,7 +55,7 @@ function PrivacyCopy(){
     <h2>Browser storage</h2>
     <p>CollabCy uses essential browser storage to remember marketplace presence and visit counts on a device. These are not advertising or tracking cookies.</p>
     <h2>Services we use</h2>
-    <p>CollabCy currently uses Supabase for database and related backend services. Hosting and infrastructure providers process requests needed to deliver the website. Dodo Payments processes Attention Marketplace bid checkout in Test Mode. CollabCy does not currently use in-app analytics, advertising pixels, or session replay.</p>
+    <p>CollabCy currently uses Supabase for database and related backend services. Hosting and infrastructure providers process requests needed to deliver the website. Dodo Payments processes Attention Marketplace bid checkout. CollabCy does not currently use in-app analytics, advertising pixels, or session replay.</p>
     <h2>Anonymous marketplace records</h2>
     <p>Anonymous Attention Marketplace listings and paid bids are not currently tied to an authenticated CollabCy account. CollabCy does not automatically delete anonymous marketplace listings, because they may not be linked to an account.</p>
     <h2>Contact</h2>
@@ -65,7 +65,7 @@ function PrivacyCopy(){
 
 function TermsCopy(){
   return <>
-    <p className="lead">These Terms describe how to use CollabCy today. Attention Marketplace initial bids and bid add-ons are paid through Dodo Payments in Test Mode. There is no separate listing fee.</p>
+    <p className="lead">These Terms describe how to use CollabCy today. Attention Marketplace initial bids and bid add-ons are paid through Dodo Payments. There is no separate listing fee.</p>
     <h2>Using CollabCy</h2>
     <p>CollabCy is an Attention Marketplace for product discovery and paid spotlight bids.</p>
     <h2>Attention Marketplace</h2>

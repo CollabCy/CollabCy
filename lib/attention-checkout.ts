@@ -1,4 +1,4 @@
-import { validateBid } from "@/app/attention/model";
+import { safeWebsite, validateBid } from "@/app/attention/model";
 import { validateAttentionListing } from "@/app/attention/validation";
 import {
   amountCentsFromIncrement,
@@ -191,7 +191,7 @@ export async function createAttentionListingCheckout(request: Request): Promise<
     const admin = getSupabaseAdmin();
     const { data: pending, error: pendingError } = await admin.rpc("create_pending_attention_listing", {
       p_name: parsed.listing.name.trim(),
-      p_website_url: parsed.listing.websiteUrl,
+      p_website_url: safeWebsite(parsed.listing.websiteUrl) || parsed.listing.websiteUrl,
       p_description: parsed.listing.description.trim(),
       p_category: parsed.listing.category,
       p_logo: parsed.listing.logo || parsed.listing.name.trim().slice(0, 1),
