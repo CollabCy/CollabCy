@@ -14,6 +14,26 @@ const main=async()=>{
  const payBuild=spawnSync(process.execPath,['node_modules/typescript/bin/tsc','lib/attention-payments.ts','app/attention/model.ts','app/attention/validation.ts','--rootDir',root,'--outDir',payOut,'--module','commonjs','--target','es2022','--skipLibCheck'],{encoding:'utf8'});
  assert.equal(payBuild.status,0,payBuild.stdout+payBuild.stderr);writeFileSync(join(payOut,'package.json'),'{"type":"commonjs"}');
  const require=createRequire(import.meta.url),m=require(join(out,'model.js')),v=require(join(out,'validation.js')),{createMarketplaceRepository}=require(join(out,'repository.js')),pay=require(join(payOut,'lib/attention-payments.js'));
+ const DodoPayments=require('dodopayments').DodoPayments;
+ const dodoEnvOut=join(out,'dodo-env');
+ const dodoEnvBuild=spawnSync(process.execPath,['node_modules/typescript/bin/tsc','lib/dodo-environment.ts','--outDir',dodoEnvOut,'--module','commonjs','--target','es2022','--skipLibCheck'],{encoding:'utf8'});
+ assert.equal(dodoEnvBuild.status,0,dodoEnvBuild.stdout+dodoEnvBuild.stderr);writeFileSync(join(dodoEnvOut,'package.json'),'{"type":"commonjs"}');
+ const dodoEnv=require(join(dodoEnvOut,'dodo-environment.js'));
+ const liveSdk=new DodoPayments({bearerToken:'placeholder',environment:'live_mode',baseURL:null});
+ const testSdk=new DodoPayments({bearerToken:'placeholder',environment:'test_mode',baseURL:null});
+ assert.equal(liveSdk.baseURL,'https://live.dodopayments.com');
+ assert.ok(!liveSdk.baseURL.includes('test.dodopayments.com'));
+ assert.equal(testSdk.baseURL,'https://test.dodopayments.com');
+ assert.equal(dodoEnv.dodoPaymentsEnvironmentFromValue('live_mode'),'live_mode');
+ assert.equal(dodoEnv.dodoPaymentsBaseUrlFor('live_mode'),liveSdk.baseURL);
+ assert.doesNotMatch(dodoEnv.dodoPaymentsBaseUrlFor('live_mode'),/test\.dodopayments\.com/);
+ assert.equal(dodoEnv.dodoPaymentsEnvironmentFromValue('test_mode'),'test_mode');
+ assert.equal(dodoEnv.dodoPaymentsBaseUrlFor('test_mode'),testSdk.baseURL);
+ assert.equal(dodoEnv.dodoPaymentsEnvironmentFromValue(' live_mode '),'live_mode');
+ assert.throws(()=>dodoEnv.dodoPaymentsEnvironmentFromValue('live'));
+ assert.throws(()=>dodoEnv.dodoPaymentsEnvironmentFromValue('production'));
+ assert.throws(()=>dodoEnv.dodoPaymentsEnvironmentFromValue(undefined));
+ assert.throws(()=>dodoEnv.dodoPaymentsEnvironmentFromValue(''));
  const now=Date.now();
  const product=(over={})=>{
   const currentBid=over.currentBid??10,listingStartsAt=over.listingStartsAt??now-3600000,name=over.name||'Product';

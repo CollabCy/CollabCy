@@ -1,4 +1,9 @@
 import DodoPayments from "dodopayments";
+import {
+  dodoPaymentsBaseUrlFor,
+  dodoPaymentsEnvironmentFromValue,
+  type DodoPaymentsEnvironment,
+} from "@/lib/dodo-environment";
 
 function assertServerOnly() {
   if (typeof window !== "undefined") {
@@ -12,17 +17,30 @@ function requiredEnv(name: "DODO_API_KEY" | "DODO_ATTENTION_BID_PRODUCT_ID") {
   return value;
 }
 
+export function dodoPaymentsEnvironment(): DodoPaymentsEnvironment {
+  assertServerOnly();
+  return dodoPaymentsEnvironmentFromValue(process.env.DODO_PAYMENTS_ENVIRONMENT);
+}
+
+export function dodoPaymentsBaseUrl() {
+  return dodoPaymentsBaseUrlFor(dodoPaymentsEnvironment());
+}
+
 let client: DodoPayments | undefined;
+let clientEnvironment: DodoPaymentsEnvironment | undefined;
 
 export function getDodoClient(): DodoPayments {
   assertServerOnly();
-  if (client) return client;
+  const environment = dodoPaymentsEnvironment();
+  if (client && clientEnvironment === environment) return client;
   const webhookKey = process.env.DODO_PAYMENTS_WEBHOOK_KEY?.trim();
   client = new DodoPayments({
     bearerToken: requiredEnv("DODO_API_KEY"),
-    environment: "test_mode",
+    environment,
+    baseURL: null,
     webhookKey: webhookKey || undefined,
   });
+  clientEnvironment = environment;
   return client;
 }
 
