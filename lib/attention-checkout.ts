@@ -1,6 +1,8 @@
 import { safeWebsite, validateBid } from "@/app/attention/model";
 import { validateAttentionListing } from "@/app/attention/validation";
 import {
+  ALREADY_LISTED_MESSAGE,
+  alreadyListedBidPath,
   amountCentsFromIncrement,
   checkoutMetadata,
   checkoutReturnPath,
@@ -214,7 +216,19 @@ export async function createAttentionListingCheckout(request: Request): Promise<
       return Response.json({ error: "Could not start checkout." }, { status: 500 });
     }
 
-    const created = pending as { id?: unknown; slug?: unknown };
+    const created = pending as { ok?: unknown; reason?: unknown; id?: unknown; slug?: unknown; status?: unknown };
+    if (created.ok === false && created.reason === "already_listed") {
+      const slug = typeof created.slug === "string" ? created.slug : "";
+      const productId = typeof created.id === "string" ? created.id : "";
+      return Response.json({
+        error: ALREADY_LISTED_MESSAGE,
+        already_listed: true,
+        product_id: productId || null,
+        slug: slug || null,
+        status: typeof created.status === "string" ? created.status : null,
+        bid_path: slug ? alreadyListedBidPath(slug) : null,
+      }, { status: 409 });
+    }
     const productId = typeof created.id === "string" ? created.id : "";
     const slug = typeof created.slug === "string" ? created.slug : "";
     if (!productId || !slug) {

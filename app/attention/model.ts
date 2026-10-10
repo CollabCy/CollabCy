@@ -26,6 +26,20 @@ export function normalizeWebsiteInput(value:string){
 }
 export function safeWebsite(value:string){try{if(typeof value!=='string'||value.length>2048)return null;const trimmed=normalizeWebsiteInput(value);if(!trimmed||trimmed.length>2048||/\s/.test(trimmed))return null;const u=new URL(trimmed);const host=u.hostname.toLowerCase();if(!['https:','http:'].includes(u.protocol)||u.username||u.password||!host)return null;if(host==='localhost'||host==='127.0.0.1'||host==='0.0.0.0'||host==='::1')return null;return u.href;}catch{return null;}}
 export function websiteHost(value:string){const href=safeWebsite(value);if(!href)return '';try{return new URL(href).hostname;}catch{return '';}}
+export function websiteListingKey(value:string){
+  const href=safeWebsite(value);
+  if(!href)return '';
+  try{
+    let host=new URL(href).hostname.toLowerCase();
+    if(host.startsWith('www.'))host=host.slice(4);
+    return host;
+  }catch{return '';}
+}
+export function findExistingListingByWebsite(products:Product[],websiteUrl:string,now=Date.now()){
+  const key=websiteListingKey(websiteUrl);
+  if(!key)return null;
+  return products.find(product=>isActive(product,now)&&websiteListingKey(product.websiteUrl)===key)||null;
+}
 export function activityTickerText(event:ActivityEvent,productName:string){
   if(event.type==='listing')return `${productName} joined`;
   if(event.type==='visit')return `${productName} received a visit`;

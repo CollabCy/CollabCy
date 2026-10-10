@@ -85,6 +85,13 @@ export function listingCheckoutReturnPath() {
   return "/?paid=1";
 }
 
+export const ALREADY_LISTED_MESSAGE =
+  "Already listed — this website is already on CollabCy. Bid more on the existing listing to increase its position.";
+
+export function alreadyListedBidPath(slug: string) {
+  return `/discover/product/${encodeURIComponent(slug)}?bid=1`;
+}
+
 export function checkoutMetadata(input: {
   payment_id: string;
   product_id: string;

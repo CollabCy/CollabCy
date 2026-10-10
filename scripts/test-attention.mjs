@@ -11,9 +11,9 @@ const main=async()=>{
  const build=spawnSync(process.execPath,['node_modules/typescript/bin/tsc','app/attention/model.ts','app/attention/validation.ts','app/attention/repository.ts','--outDir',out,'--module','commonjs','--target','es2022','--skipLibCheck'],{encoding:'utf8'});
  assert.equal(build.status,0,build.stdout+build.stderr);writeFileSync(join(out,'package.json'),'{"type":"commonjs"}');
  const payOut=join(out,'pay');
- const payBuild=spawnSync(process.execPath,['node_modules/typescript/bin/tsc','lib/attention-payments.ts','app/attention/model.ts','app/attention/validation.ts','--rootDir',root,'--outDir',payOut,'--module','commonjs','--target','es2022','--skipLibCheck'],{encoding:'utf8'});
+ const payBuild=spawnSync(process.execPath,['node_modules/typescript/bin/tsc','lib/attention-payments.ts','lib/attention-reconciliation.ts','app/attention/model.ts','app/attention/validation.ts','--rootDir',root,'--outDir',payOut,'--module','commonjs','--target','es2022','--skipLibCheck'],{encoding:'utf8'});
  assert.equal(payBuild.status,0,payBuild.stdout+payBuild.stderr);writeFileSync(join(payOut,'package.json'),'{"type":"commonjs"}');
- const require=createRequire(import.meta.url),m=require(join(out,'model.js')),v=require(join(out,'validation.js')),{createMarketplaceRepository}=require(join(out,'repository.js')),pay=require(join(payOut,'lib/attention-payments.js'));
+ const require=createRequire(import.meta.url),m=require(join(out,'model.js')),v=require(join(out,'validation.js')),{createMarketplaceRepository}=require(join(out,'repository.js')),pay=require(join(payOut,'lib/attention-payments.js')),recon=require(join(payOut,'lib/attention-reconciliation.js'));
  const DodoPayments=require('dodopayments').DodoPayments;
  const dodoEnvOut=join(out,'dodo-env');
  const dodoEnvBuild=spawnSync(process.execPath,['node_modules/typescript/bin/tsc','lib/dodo-environment.ts','--outDir',dodoEnvOut,'--module','commonjs','--target','es2022','--skipLibCheck'],{encoding:'utf8'});
@@ -37,7 +37,8 @@ const main=async()=>{
  const now=Date.now();
  const product=(over={})=>{
   const currentBid=over.currentBid??10,listingStartsAt=over.listingStartsAt??now-3600000,name=over.name||'Product';
-  return {id:over.id||`id-${name.toLowerCase()}`,brandId:over.brandId??'',brandName:over.brandName||`${name} Studio`,name,slug:over.slug||name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),logo:over.logo||name[0],color:over.color||'#3267e8',websiteUrl:over.websiteUrl||'https://example.com',description:over.description||`${name} description.`,category:over.category||'SaaS',tags:over.tags||[],currentBid,clickCount:over.clickCount??0,visitTimes:over.visitTimes||[],status:over.status||'active',listingStartsAt,listingEndsAt:over.listingEndsAt??0,bids:over.bids||[{id:`bid-${name}`,amount:currentBid,createdAt:over.lastBidAt??listingStartsAt}],campaign:over.campaign};
+  const slug=over.slug||name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  return {id:over.id||`id-${name.toLowerCase()}`,brandId:over.brandId??'',brandName:over.brandName||`${name} Studio`,name,slug,logo:over.logo||name[0],color:over.color||'#3267e8',websiteUrl:over.websiteUrl||`https://${slug||'product'}.example.com`,description:over.description||`${name} description.`,category:over.category||'SaaS',tags:over.tags||[],currentBid,clickCount:over.clickCount??0,visitTimes:over.visitTimes||[],status:over.status||'active',listingStartsAt,listingEndsAt:over.listingEndsAt??0,bids:over.bids||[{id:`bid-${name}`,amount:currentBid,createdAt:over.lastBidAt??listingStartsAt}],campaign:over.campaign};
  };
  const rankedThree=[product({id:'a',name:'fjrsj',slug:'fjrsj',currentBid:2000,listingStartsAt:now-90000}),product({id:'b',name:'TestProduct',slug:'testproduct',currentBid:50,listingStartsAt:now-60000}),product({id:'c',name:'LowBid',slug:'lowbid',currentBid:31,listingStartsAt:now-30000})];
  assert.deepEqual(m.getRankedProducts(rankedThree,now).map(p=>p.name),['fjrsj','TestProduct','LowBid']);
@@ -249,6 +250,29 @@ const main=async()=>{
  assert.equal(v.validateAttentionListing({name:'X',websiteUrl:'www.example.com',description:'  ',category:'SaaS',initialBid:2}),'');
  assert.ok(v.validateAttentionListing({name:'X',websiteUrl:'not a domain',description:'',category:'SaaS',initialBid:2}));
  assert.ok(v.validateAttentionListing({name:'X',websiteUrl:'javascript:alert(1)',description:'',category:'SaaS',initialBid:2}));
+ assert.equal(m.websiteListingKey('https://www.Example.com/path/?q=1#hash'),m.websiteListingKey('example.com'));
+ assert.equal(m.websiteListingKey('http://example.com/'),m.websiteListingKey('https://example.com'));
+ assert.notEqual(m.websiteListingKey('https://app.example.com'),m.websiteListingKey('https://example.com'));
+ assert.notEqual(m.websiteListingKey('https://example.org'),m.websiteListingKey('https://example.com'));
+ assert.equal(pay.ALREADY_LISTED_MESSAGE,'Already listed — this website is already on CollabCy. Bid more on the existing listing to increase its position.');
+ assert.equal(pay.alreadyListedBidPath('octopusx'),'/discover/product/octopusx?bid=1');
+ const liveDup=product({id:'live-site',name:'Live',slug:'live',websiteUrl:'https://octopusx.ai/?utm=x',currentBid:3});
+ assert.equal(m.findExistingListingByWebsite([liveDup],'https://www.octopusx.ai/about',now)?.id,'live-site');
+ assert.equal(m.findExistingListingByWebsite([product({...liveDup,status:'expired'})],'https://octopusx.ai',now),null);
+ const reconOk=recon.planOctopusXReconciliation({
+  products:[{id:recon.OCTOPUS_CANONICAL_LISTING_ID,status:'active',current_bid:3},{id:recon.OCTOPUS_SIX_DOLLAR_LISTING_ID,status:'active',current_bid:6},{id:recon.OCTOPUS_THIRD_DRAFT_LISTING_ID,status:'draft',current_bid:0}],
+  payments:[
+   {id:recon.OCTOPUS_THREE_DOLLAR_PAYMENT_ID,product_id:recon.OCTOPUS_CANONICAL_LISTING_ID,increment:3,amount_cents:300,status:'applied',kind:'listing',dodo_payment_id:recon.OCTOPUS_THREE_DODO_PAYMENT_ID},
+   {id:recon.OCTOPUS_SIX_DOLLAR_PAYMENT_ID,product_id:recon.OCTOPUS_SIX_DOLLAR_LISTING_ID,increment:6,amount_cents:600,status:'applied',kind:'listing',dodo_payment_id:recon.OCTOPUS_SIX_DODO_PAYMENT_ID},
+   {id:recon.OCTOPUS_THIRD_PAYMENT_ID,product_id:recon.OCTOPUS_THIRD_DRAFT_LISTING_ID,increment:6,amount_cents:600,status:'pending',kind:'listing',dodo_payment_id:null},
+  ],
+ });
+ assert.equal(reconOk.safe,true);
+ assert.equal(reconOk.combinedBid,9);
+ assert.deepEqual(reconOk.hideListingIds,[recon.OCTOPUS_SIX_DOLLAR_LISTING_ID,recon.OCTOPUS_THIRD_DRAFT_LISTING_ID]);
+ const reconBlock=recon.planOctopusXReconciliation({products:reconOk&&[],payments:[{id:recon.OCTOPUS_THIRD_PAYMENT_ID,product_id:recon.OCTOPUS_THIRD_DRAFT_LISTING_ID,increment:6,amount_cents:600,status:'applied',kind:'listing',dodo_payment_id:'pay_other'}]});
+ assert.equal(reconBlock.safe,false);
+ assert.ok(reconBlock.blockers.includes('third_checkout_has_successful_payment'));
 
  const noSeed=names=>assert.ok(names.every(name=>!DEMO_NAMES.includes(name)),`demo product leaked: ${names.join(',')}`);
  function memoryBackend(seedProducts=[],seedActivity=[]){
@@ -261,6 +285,8 @@ const main=async()=>{
    async publish(listing){
     const listingError=v.validateAttentionListing(listing);
     if(listingError)throw new Error(listingError);
+    const existing=m.findExistingListingByWebsite(store.products,listing.websiteUrl,now);
+    if(existing)throw new Error('Already listed — this website is already on CollabCy. Bid more on the existing listing to increase its position.');
     if(store.products.some(p=>p.name.toLowerCase()===listing.name.trim().toLowerCase()&&p.websiteUrl===listing.websiteUrl&&now-p.listingStartsAt<45000))throw new Error('This product was just listed. Please wait before listing it again.');
     const created={id:`remote-${store.published.length+1}`,brandId:'',brandName:listing.brandName,name:listing.name,slug:listing.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'product',logo:listing.logo,color:'#3267e8',websiteUrl:listing.websiteUrl,description:listing.description,category:listing.category,tags:[],currentBid:listing.initialBid,clickCount:0,visitTimes:[],status:'active',listingStartsAt:now,listingEndsAt:0,bids:[{id:`list-bid-${store.published.length+1}`,amount:listing.initialBid,createdAt:now}]};
     store.products=store.products.some(p=>p.id===created.id)?store.products.map(p=>p.id===created.id?created:p):[...store.products,created];
@@ -408,6 +434,7 @@ const main=async()=>{
 
  const dup=createMarketplaceRepository(undefined,persist);
  await assert.rejects(()=>dup.createProduct({brandId:'',brandName:'Guest Co',name:'TestProduct',logo:'T',websiteUrl:'https://example.com',description:'Listed without an account.',category:'Apps',initialBid:50}));
+ await assert.rejects(()=>dup.createProduct({brandId:'',brandName:'Other Co',name:'OtherName',logo:'O',websiteUrl:'https://www.example.com/about?x=1',description:'Same site.',category:'Apps',initialBid:6}));
  assert.equal(persist.store.products.length,1);
 
  await assert.rejects(()=>Promise.resolve(incrementRepo.simulateBid('product-2',4.5)));

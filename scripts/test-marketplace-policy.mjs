@@ -41,6 +41,9 @@ assert.doesNotMatch(client,/createCampaign/);
 assert.doesNotMatch(client,/invite_creator_to_campaign/);
 
 assert.match(listingSql,/create_pending_attention_listing/);
+const uniqueWebsiteSql=read('supabase/migrations/20261010140000_attention_unique_website_listings.sql');
+assert.match(uniqueWebsiteSql,/already_listed/);
+assert.match(uniqueWebsiteSql,/attention_website_key/);
 assert.match(collabCleanup,/drop table if exists public\.campaigns cascade/);
 assert.match(collabCleanup,/Does not drop Attention Marketplace/);
 

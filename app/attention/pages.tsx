@@ -298,15 +298,16 @@ export function AttentionProduct({slug}:{slug:string}){
   const openWebsite=useWebsiteVisit();
   const [bid,setBid]=useState<string|null>(null);
   const paidReturn=params.get('paid')==='1';
-  const intendedBid=Number(params.get('bid'));
-  const initialIncrement=Number.isInteger(intendedBid)&&intendedBid>0?intendedBid:undefined;
+  const bidParam=params.get('bid');
+  const intendedBid=Number(bidParam);
+  const initialIncrement=Number.isInteger(intendedBid)&&intendedBid>=MIN_INITIAL_BID?intendedBid:undefined;
   useEffect(()=>{
     if(paidReturn) repository.refresh();
   },[paidReturn,repository]);
   useEffect(()=>{
-    if(!p||paidReturn||!initialIncrement)return;
+    if(!p||paidReturn||bidParam==null||bidParam==='')return;
     setBid(p.id);
-  },[p?.id,paidReturn,initialIncrement]);
+  },[p?.id,paidReturn,bidParam]);
   if(!p)return repository.getStatus()==='loading'
     ? <><PublicHeader/><main className="public-container attention-detail"/><PublicFooter/></>
     : <><PublicHeader/><main className="public-container attention-detail"><Empty title="This product hasn’t arrived yet." description="Explore the marketplace to find something new."><Link href="/" className="btn btn-primary">Explore products</Link></Empty></main><PublicFooter/></>;
