@@ -163,6 +163,23 @@ function asFiniteAmount(value: unknown) {
   return Number.isFinite(amount) ? amount : 0;
 }
 
+export type DodoProductCartItem = { product_id?: string };
+
+export function asProductCart(value: unknown): DodoProductCartItem[] | null {
+  if (value == null) return null;
+  if (!Array.isArray(value)) return null;
+  return value.map((item) => {
+    if (!item || typeof item !== "object") return {};
+    const productId = (item as { product_id?: unknown }).product_id;
+    return typeof productId === "string" && productId ? { product_id: productId } : {};
+  });
+}
+
+function cartContainsConfiguredProduct(cart: DodoProductCartItem[] | null | undefined, dodoProductId: string) {
+  if (!Array.isArray(cart) || cart.length === 0 || !dodoProductId) return false;
+  return cart.some((item) => item?.product_id === dodoProductId);
+}
+
 export function extractPaymentSucceeded(event: unknown): {
   type: string;
   payment_id: string;
@@ -172,6 +189,7 @@ export function extractPaymentSucceeded(event: unknown): {
   settlement_amount: number;
   settlement_currency: string;
   metadata: Record<string, string>;
+  product_cart: DodoProductCartItem[] | null;
 } | null {
   if (!event || typeof event !== "object") return null;
   const payload = event as { type?: unknown; data?: unknown };
@@ -186,6 +204,7 @@ export function extractPaymentSucceeded(event: unknown): {
       settlement_amount: 0,
       settlement_currency: "",
       metadata: {},
+      product_cart: null,
     };
   }
   const data = payload.data as Record<string, unknown>;
@@ -202,7 +221,41 @@ export function extractPaymentSucceeded(event: unknown): {
     settlement_amount: asFiniteAmount(data.settlement_amount),
     settlement_currency: settlementCurrency,
     metadata: asMetadataRecord(data.metadata),
+    product_cart: asProductCart(data.product_cart),
   };
+}
+
+export type PaidAmountClass = "usd_match" | "usd_settlement" | "converted" | "mismatch";
+
+function isIsoCurrency(value: string) {
+  return /^[A-Z]{3}$/.test(value);
+}
+
+export function classifyPaidAmount(
+  amountCents: number,
+  paidAmount: number,
+  currency: string,
+  settlement?: { amount?: number; currency?: string },
+): PaidAmountClass {
+  if (!(amountCents > 0) || !(paidAmount > 0)) return "mismatch";
+  const charged = (currency || "").toUpperCase();
+  if (!isIsoCurrency(charged)) return "mismatch";
+  if (charged === ATTENTION_BID_CURRENCY) return paidAmount === amountCents ? "usd_match" : "mismatch";
+  const settledCurrency = (settlement?.currency || "").toUpperCase();
+  const settledAmount = settlement?.amount;
+  // Settlement is the merchant credit, not the original listing price. Dodo
+  // fees make it differ from amount_cents (INR example: 236 vs 200). There is
+  // no safe expected FX amount, so any positive USD settlement is accepted
+  // here; claim_paid_attention_bid_payment still enforces stored amount_cents.
+  if (
+    settledCurrency === ATTENTION_BID_CURRENCY &&
+    typeof settledAmount === "number" &&
+    Number.isFinite(settledAmount) &&
+    settledAmount > 0
+  ) {
+    return "usd_settlement";
+  }
+  return "converted";
 }
 
 export function paidAmountMatches(
@@ -211,17 +264,45 @@ export function paidAmountMatches(
   currency: string,
   settlement?: { amount?: number; currency?: string },
 ) {
-  if (!(amountCents > 0)) return false;
-  const charged = (currency || "").toUpperCase();
-  if (charged === ATTENTION_BID_CURRENCY) return paidAmount === amountCents;
-  const settledCurrency = (settlement?.currency || "").toUpperCase();
-  const settledAmount = settlement?.amount;
-  return (
-    settledCurrency === ATTENTION_BID_CURRENCY &&
-    typeof settledAmount === "number" &&
-    Number.isFinite(settledAmount) &&
-    settledAmount > 0
-  );
+  const kind = classifyPaidAmount(amountCents, paidAmount, currency, settlement);
+  return kind === "usd_match" || kind === "usd_settlement";
+}
+
+export function convertedPaymentMatches(input: {
+  dodoPaymentId: string;
+  checkoutSessionId: string | null;
+  metadata: Record<string, string>;
+  dodoProductId: string;
+  payment: {
+    payment_id?: string;
+    status?: string | null;
+    checkout_session_id?: string | null;
+    metadata?: unknown;
+    product_cart?: Array<{ product_id?: string }> | null;
+    total_amount?: unknown;
+    currency?: string | null;
+  };
+  webhookProductCart?: DodoProductCartItem[] | null;
+}) {
+  if (!input.dodoPaymentId || !input.checkoutSessionId || !input.dodoProductId) return false;
+  if (input.payment.payment_id !== input.dodoPaymentId) return false;
+  if (input.payment.status !== "succeeded") return false;
+  if (input.payment.checkout_session_id !== input.checkoutSessionId) return false;
+  if (!isIsoCurrency((input.payment.currency || "").toUpperCase())) return false;
+  if (!(asFiniteAmount(input.payment.total_amount) > 0)) return false;
+  const retrieved = asMetadataRecord(input.payment.metadata);
+  if (
+    retrieved.payment_id !== input.metadata.payment_id ||
+    retrieved.product_id !== input.metadata.product_id ||
+    retrieved.increment !== input.metadata.increment
+  ) {
+    return false;
+  }
+  const retrievedCart = input.payment.product_cart;
+  if (Array.isArray(retrievedCart) && retrievedCart.length > 0) {
+    return cartContainsConfiguredProduct(retrievedCart, input.dodoProductId);
+  }
+  return cartContainsConfiguredProduct(input.webhookProductCart, input.dodoProductId);
 }
 
 export function metadataMatchesPending(row: {
@@ -252,10 +333,16 @@ export function fulfillmentAction(input: {
   currency: string;
   metadataMatch: boolean;
   settlement?: { amount?: number; currency?: string };
+  convertedConfirmed?: boolean;
 }): "ignore_event" | "reject_mismatch" | "already_applied" | "continue_apply" | "mark_paid_and_apply" {
   if (!isPaymentSucceededEvent(input.eventType)) return "ignore_event";
   if (input.paymentStatus === "applied") return "already_applied";
-  if (!input.metadataMatch || !paidAmountMatches(input.amountCents, input.paidAmount, input.currency, input.settlement)) {
+  const amountClass = classifyPaidAmount(input.amountCents, input.paidAmount, input.currency, input.settlement);
+  if (
+    !input.metadataMatch ||
+    amountClass === "mismatch" ||
+    (amountClass === "converted" && !input.convertedConfirmed)
+  ) {
     return "reject_mismatch";
   }
   if (

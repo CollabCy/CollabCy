@@ -1,12 +1,47 @@
 import {
   ATTENTION_BID_CURRENCY,
+  classifyPaidAmount,
+  convertedPaymentMatches,
   extractPaymentSucceeded,
   isPaymentSucceededEvent,
-  paidAmountMatches,
   dodoWebhookHeaders,
 } from "@/lib/attention-payments";
-import { dodoWebhookKey, getDodoClient } from "@/lib/dodo";
+import { attentionBidProductId, dodoWebhookKey, getDodoClient } from "@/lib/dodo";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+
+export type DodoWebhookRuntime = {
+  unwrap: (rawBody: string, headers: Headers) => unknown;
+  retrievePayment: (dodoPaymentId: string) => Promise<{
+    payment_id?: string;
+    status?: string | null;
+    checkout_session_id?: string | null;
+    metadata?: unknown;
+    product_cart?: Array<{ product_id?: string }> | null;
+    total_amount?: unknown;
+    currency?: string | null;
+  }>;
+  dodoProductId: () => string;
+  rpc: (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { code?: string } | null }>;
+};
+
+function defaultWebhookRuntime(): DodoWebhookRuntime {
+  return {
+    unwrap: (rawBody, headers) =>
+      getDodoClient().webhooks.unwrap(rawBody, {
+        headers: dodoWebhookHeaders(headers),
+        key: dodoWebhookKey(),
+      }),
+    retrievePayment: (dodoPaymentId) => getDodoClient().payments.retrieve(dodoPaymentId),
+    dodoProductId: attentionBidProductId,
+    rpc: async (name, args) => {
+      const { data, error } = await getSupabaseAdmin().rpc(name, args);
+      return { data, error };
+    },
+  };
+}
 
 function rpcRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -16,7 +51,7 @@ function webhookLog(stage: string, details: Record<string, unknown>) {
   console.info("[attention-webhook]", { stage, ...details });
 }
 
-export async function handleDodoWebhook(request: Request): Promise<Response> {
+export async function handleDodoWebhook(request: Request, runtime = defaultWebhookRuntime()): Promise<Response> {
   let rawBody = "";
   try {
     rawBody = await request.text();
@@ -28,11 +63,7 @@ export async function handleDodoWebhook(request: Request): Promise<Response> {
   const webhookId = request.headers.get("webhook-id") || "";
   let event: unknown;
   try {
-    const key = dodoWebhookKey();
-    event = getDodoClient().webhooks.unwrap(rawBody, {
-      headers: dodoWebhookHeaders(request.headers),
-      key,
-    });
+    event = runtime.unwrap(rawBody, request.headers);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("not configured")) {
@@ -63,12 +94,11 @@ export async function handleDodoWebhook(request: Request): Promise<Response> {
     });
     return Response.json({ error: "Invalid payment event." }, { status: 400 });
   }
-  if (
-    !paidAmountMatches(increment * 100, extracted.total_amount, extracted.currency, {
-      amount: extracted.settlement_amount,
-      currency: extracted.settlement_currency,
-    })
-  ) {
+  const amountClass = classifyPaidAmount(increment * 100, extracted.total_amount, extracted.currency, {
+    amount: extracted.settlement_amount,
+    currency: extracted.settlement_currency,
+  });
+  if (amountClass === "mismatch") {
     webhookLog("amount_mismatch", {
       type: extracted.type,
       payment_id: paymentId,
@@ -80,9 +110,54 @@ export async function handleDodoWebhook(request: Request): Promise<Response> {
     });
     return Response.json({ error: "Payment amount mismatch." }, { status: 400 });
   }
+  if (amountClass === "converted") {
+    if (!extracted.checkout_session_id) {
+      webhookLog("amount_mismatch", {
+        type: extracted.type,
+        payment_id: paymentId,
+        increment,
+        currency: extracted.currency,
+        reason: "missing_checkout_session",
+      });
+      return Response.json({ error: "Payment amount mismatch." }, { status: 400 });
+    }
+    let retrieved: {
+      payment_id?: string;
+      status?: string | null;
+      checkout_session_id?: string | null;
+      metadata?: unknown;
+      product_cart?: Array<{ product_id?: string }> | null;
+      total_amount?: unknown;
+      currency?: string | null;
+    };
+    try {
+      retrieved = await runtime.retrievePayment(extracted.payment_id);
+    } catch {
+      webhookLog("converted_lookup", { payment_id: paymentId, ok: false });
+      return Response.json({ error: "Could not verify converted payment." }, { status: 503 });
+    }
+    if (
+      !convertedPaymentMatches({
+        dodoPaymentId: extracted.payment_id,
+        checkoutSessionId: extracted.checkout_session_id,
+        metadata: extracted.metadata,
+        dodoProductId: runtime.dodoProductId(),
+        payment: retrieved,
+        webhookProductCart: extracted.product_cart,
+      })
+    ) {
+      webhookLog("amount_mismatch", {
+        type: extracted.type,
+        payment_id: paymentId,
+        increment,
+        currency: extracted.currency,
+        reason: "converted_unverified",
+      });
+      return Response.json({ error: "Payment amount mismatch." }, { status: 400 });
+    }
+  }
 
-  const admin = getSupabaseAdmin();
-  const { data: claimed, error: claimError } = await admin.rpc("claim_paid_attention_bid_payment", {
+  const { data: claimed, error: claimError } = await runtime.rpc("claim_paid_attention_bid_payment", {
     p_payment_id: paymentId,
     p_dodo_payment_id: extracted.payment_id,
     p_dodo_session_id: extracted.checkout_session_id,
@@ -111,7 +186,7 @@ export async function handleDodoWebhook(request: Request): Promise<Response> {
     return Response.json({ received: true, result: "already_applied" });
   }
 
-  const { data: applied, error: applyError } = await admin.rpc("apply_paid_attention_bid", {
+  const { data: applied, error: applyError } = await runtime.rpc("apply_paid_attention_bid", {
     p_payment_id: paymentId,
   });
   if (applyError) {
