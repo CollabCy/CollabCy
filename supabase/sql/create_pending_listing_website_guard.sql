@@ -1,11 +1,13 @@
--- Attention Marketplace: one live listing per normalized website.
--- Local implementation file. Do not apply to production unless explicitly requested.
--- Does not change Dodo webhook signature checks, converted-payment retrieve, or FX handling.
--- Unique index is dropped then rebuilt so stored keys match this function body.
+-- Standalone: add hostname duplicate guard to create_pending_attention_listing.
+-- Run in Supabase SQL Editor as postgres. Does not create a unique index,
+-- does not change products/payments/bids, and does not replay Dodo webhooks.
+-- Preserves the live function signature, grants, and successful JSON shape.
 
-drop index if exists public.attention_products_website_key_live_uidx;
+begin;
 
-create or replace function public.attention_website_key(p_url text)
+-- Versioned helper avoids changing the semantics of any existing expression
+-- index built on public.attention_website_key(text).
+create or replace function public.attention_listing_website_key_v1(p_url text)
 returns text
 language plpgsql
 immutable
@@ -27,7 +29,6 @@ begin
     return null;
   end if;
 
-  -- Authority only. Query/fragment '@' must not be treated as credentials.
   v_auth := substring(v from '^https?://([^/?#]*)');
   if v_auth is null or v_auth = '' then
     return null;
@@ -36,7 +37,6 @@ begin
     return null;
   end if;
 
-  -- Listings use hostnames via attention_clean_website. Reject IPv6.
   if left(v_auth, 1) = '[' then
     return null;
   end if;
@@ -65,6 +65,47 @@ begin
     return null;
   end if;
   return v_host;
+end;
+$$;
+
+create or replace function public.find_attention_listing_by_website(p_website_url text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_website text;
+  v_website_key text;
+  v_existing public.attention_products;
+begin
+  v_website := public.attention_clean_website(p_website_url);
+  if v_website is null then
+    return jsonb_build_object('ok', false, 'reason', 'invalid_website');
+  end if;
+  v_website_key := public.attention_listing_website_key_v1(v_website);
+  if v_website_key is null then
+    return jsonb_build_object('ok', false, 'reason', 'invalid_website');
+  end if;
+
+  select *
+    into v_existing
+  from public.attention_products
+  where public.attention_listing_website_key_v1(website_url) = v_website_key
+    and status in ('active', 'draft')
+  order by case when status = 'active' then 0 else 1 end, created_at asc
+  limit 1;
+
+  if found then
+    return jsonb_build_object(
+      'ok', false,
+      'reason', 'already_listed',
+      'id', v_existing.id,
+      'slug', v_existing.slug,
+      'status', v_existing.status
+    );
+  end if;
+  return jsonb_build_object('ok', true, 'reason', 'available');
 end;
 $$;
 
@@ -114,7 +155,7 @@ begin
   if v_website is null then
     raise exception 'Add a product name, description, category, and valid website.';
   end if;
-  v_website_key := public.attention_website_key(v_website);
+  v_website_key := public.attention_listing_website_key_v1(v_website);
   if v_website_key is null then
     raise exception 'Add a product name, description, category, and valid website.';
   end if;
@@ -130,7 +171,7 @@ begin
   select *
     into v_existing
   from public.attention_products
-  where public.attention_website_key(website_url) = v_website_key
+  where public.attention_listing_website_key_v1(website_url) = v_website_key
     and status in ('active', 'draft')
   order by case when status = 'active' then 0 else 1 end, created_at asc
   limit 1
@@ -207,7 +248,7 @@ begin
         select *
           into v_existing
         from public.attention_products
-        where public.attention_website_key(website_url) = v_website_key
+        where public.attention_listing_website_key_v1(website_url) = v_website_key
           and status in ('active', 'draft')
         order by case when status = 'active' then 0 else 1 end, created_at asc
         limit 1;
@@ -238,7 +279,6 @@ begin
   end;
 
   return jsonb_build_object(
-    'ok', true,
     'id', v_id,
     'slug', v_slug,
     'status', 'draft',
@@ -248,54 +288,21 @@ begin
 end;
 $$;
 
-revoke all on function public.attention_website_key(text) from public, anon, authenticated;
-grant execute on function public.attention_website_key(text) to service_role;
+revoke all on function public.attention_listing_website_key_v1(text) from public, anon, authenticated;
+grant execute on function public.attention_listing_website_key_v1(text) to service_role;
+revoke all on function public.find_attention_listing_by_website(text) from public, anon, authenticated;
+grant execute on function public.find_attention_listing_by_website(text) to service_role;
 revoke all on function public.create_pending_attention_listing(text, text, text, text, text, text, integer, text) from public, anon, authenticated;
 grant execute on function public.create_pending_attention_listing(text, text, text, text, text, text, integer, text) to service_role;
 
-do $$
-declare
-  v_unique boolean;
-  v_valid boolean;
-  v_def text;
-begin
-  select string_agg(format('key=%s [%s]', website_key, id_list), ' | ' order by website_key)
-    into v_def
-  from (
-    select
-      public.attention_website_key(website_url) as website_key,
-      string_agg(format('%s:%s:%s', id, slug, status), ', ' order by created_at, id) as id_list
-    from public.attention_products
-    where status in ('active', 'draft')
-      and public.attention_website_key(website_url) is not null
-    group by 1
-    having count(*) > 1
-  ) duplicates;
-  if v_def is not null then
-    raise exception 'Cannot create attention_products_website_key_live_uidx: live website duplicates exist.'
-      using detail = v_def;
-  end if;
+commit;
 
-  execute $index$
-    create unique index attention_products_website_key_live_uidx
-      on public.attention_products (public.attention_website_key(website_url))
-      where status in ('active', 'draft')
-  $index$;
-
-  select i.indisunique, i.indisvalid, pg_get_indexdef(i.indexrelid)
-    into v_unique, v_valid, v_def
-  from pg_index i
-  join pg_class c on c.oid = i.indexrelid
-  join pg_namespace n on n.oid = c.relnamespace
-  where n.nspname = 'public'
-    and c.relname = 'attention_products_website_key_live_uidx';
-  if v_unique is not true or v_valid is not true
-     or v_def is null
-     or v_def !~* 'unique'
-     or v_def !~* 'attention_website_key'
-     or v_def !~* 'active'
-     or v_def !~* 'draft' then
-    raise exception 'attention_products_website_key_live_uidx was not created as a valid unique index.';
-  end if;
-end
-$$;
+-- Verification (read-only after apply):
+-- select pg_get_functiondef(
+--   'public.create_pending_attention_listing(text, text, text, text, text, text, integer, text)'::regprocedure
+-- );
+-- Expect: pg_advisory_xact_lock, attention_listing_website_key_v1, already_listed,
+-- status in ('active', 'draft'). Must not mention unique index create.
+-- select pg_get_functiondef(
+--   'public.find_attention_listing_by_website(text)'::regprocedure
+-- );

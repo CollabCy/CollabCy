@@ -252,27 +252,43 @@ const main=async()=>{
  assert.ok(v.validateAttentionListing({name:'X',websiteUrl:'javascript:alert(1)',description:'',category:'SaaS',initialBid:2}));
  assert.equal(m.websiteListingKey('https://www.Example.com/path/?q=1#hash'),m.websiteListingKey('example.com'));
  assert.equal(m.websiteListingKey('http://example.com/'),m.websiteListingKey('https://example.com'));
+ assert.equal(m.websiteListingKey('https://EXAMPLE.com./path?x=1#y'),m.websiteListingKey('example.com'));
  assert.notEqual(m.websiteListingKey('https://app.example.com'),m.websiteListingKey('https://example.com'));
  assert.notEqual(m.websiteListingKey('https://example.org'),m.websiteListingKey('https://example.com'));
+ assert.equal(m.websiteListingKey('https://user:pass@example.com'),'');
+ assert.equal(m.websiteListingKey('https://[2001:db8::1]/'),'');
+ assert.equal(m.websiteListingKey('https://example.com:99999/'),'');
  assert.equal(pay.ALREADY_LISTED_MESSAGE,'Already listed — this website is already on CollabCy. Bid more on the existing listing to increase its position.');
  assert.equal(pay.alreadyListedBidPath('octopusx'),'/discover/product/octopusx?bid=1');
  const liveDup=product({id:'live-site',name:'Live',slug:'live',websiteUrl:'https://octopusx.ai/?utm=x',currentBid:3});
  assert.equal(m.findExistingListingByWebsite([liveDup],'https://www.octopusx.ai/about',now)?.id,'live-site');
  assert.equal(m.findExistingListingByWebsite([product({...liveDup,status:'expired'})],'https://octopusx.ai',now),null);
- const reconOk=recon.planOctopusXReconciliation({
-  products:[{id:recon.OCTOPUS_CANONICAL_LISTING_ID,status:'active',current_bid:3},{id:recon.OCTOPUS_SIX_DOLLAR_LISTING_ID,status:'active',current_bid:6},{id:recon.OCTOPUS_THIRD_DRAFT_LISTING_ID,status:'draft',current_bid:0}],
-  payments:[
-   {id:recon.OCTOPUS_THREE_DOLLAR_PAYMENT_ID,product_id:recon.OCTOPUS_CANONICAL_LISTING_ID,increment:3,amount_cents:300,status:'applied',kind:'listing',dodo_payment_id:recon.OCTOPUS_THREE_DODO_PAYMENT_ID},
-   {id:recon.OCTOPUS_SIX_DOLLAR_PAYMENT_ID,product_id:recon.OCTOPUS_SIX_DOLLAR_LISTING_ID,increment:6,amount_cents:600,status:'applied',kind:'listing',dodo_payment_id:recon.OCTOPUS_SIX_DODO_PAYMENT_ID},
-   {id:recon.OCTOPUS_THIRD_PAYMENT_ID,product_id:recon.OCTOPUS_THIRD_DRAFT_LISTING_ID,increment:6,amount_cents:600,status:'pending',kind:'listing',dodo_payment_id:null},
-  ],
- });
+ const reconSnap=recon.productionOctopusXSnapshot();
+ const reconOk=recon.planOctopusXReconciliation(reconSnap);
  assert.equal(reconOk.safe,true);
  assert.equal(reconOk.combinedBid,9);
  assert.deepEqual(reconOk.hideListingIds,[recon.OCTOPUS_SIX_DOLLAR_LISTING_ID,recon.OCTOPUS_THIRD_DRAFT_LISTING_ID]);
- const reconBlock=recon.planOctopusXReconciliation({products:reconOk&&[],payments:[{id:recon.OCTOPUS_THIRD_PAYMENT_ID,product_id:recon.OCTOPUS_THIRD_DRAFT_LISTING_ID,increment:6,amount_cents:600,status:'applied',kind:'listing',dodo_payment_id:'pay_other'}]});
- assert.equal(reconBlock.safe,false);
- assert.ok(reconBlock.blockers.includes('third_checkout_has_successful_payment'));
+ const reconFirst=recon.applyOctopusXReconciliation(reconSnap);
+ assert.equal(reconFirst.ok,true);
+ assert.equal(reconFirst.credited,true);
+ assert.equal(reconFirst.world.products.find(p=>p.id===recon.OCTOPUS_CANONICAL_LISTING_ID).current_bid,9);
+ assert.equal(reconFirst.world.products.find(p=>p.id===recon.OCTOPUS_SIX_DOLLAR_LISTING_ID).status,'hidden');
+ assert.equal(reconFirst.world.products.find(p=>p.id===recon.OCTOPUS_THIRD_DRAFT_LISTING_ID).status,'hidden');
+ assert.equal(reconFirst.world.payments.find(p=>p.id===recon.OCTOPUS_SIX_DOLLAR_PAYMENT_ID).status,'applied');
+ assert.equal(reconFirst.world.payments.find(p=>p.id===recon.OCTOPUS_SIX_DOLLAR_PAYMENT_ID).dodo_payment_id,recon.OCTOPUS_SIX_DODO_PAYMENT_ID);
+ assert.equal(reconFirst.world.payments.find(p=>p.id===recon.OCTOPUS_THIRD_PAYMENT_ID).status,'pending');
+ assert.equal(reconFirst.world.bids.filter(b=>b.product_id===recon.OCTOPUS_CANONICAL_LISTING_ID&&b.amount===9).length,1);
+ const reconRerun=recon.applyOctopusXReconciliation(reconFirst.world);
+ assert.equal(reconRerun.ok,true);
+ assert.equal(reconRerun.credited,false);
+ assert.equal(reconRerun.world.bids.filter(b=>b.product_id===recon.OCTOPUS_CANONICAL_LISTING_ID&&b.amount===9).length,1);
+ const reconBlock=recon.applyOctopusXReconciliation({...reconSnap,payments:reconSnap.payments.map(p=>p.id===recon.OCTOPUS_THIRD_PAYMENT_ID?{...p,status:'applied',dodo_payment_id:'pay_other'}:p)});
+ assert.equal(reconBlock.ok,false);
+ assert.match(reconBlock.reason,/third_checkout_has_successful_payment/);
+ const reconBadBid=recon.applyOctopusXReconciliation({...reconSnap,products:reconSnap.products.map(p=>p.id===recon.OCTOPUS_CANONICAL_LISTING_ID?{...p,current_bid:4}:p)});
+ assert.equal(reconBadBid.ok,false);
+ const reconDupNine=recon.applyOctopusXReconciliation({...reconSnap,bids:[...reconSnap.bids,{id:'extra-9',product_id:recon.OCTOPUS_CANONICAL_LISTING_ID,amount:9}]});
+ assert.equal(reconDupNine.ok,false);
 
  const noSeed=names=>assert.ok(names.every(name=>!DEMO_NAMES.includes(name)),`demo product leaked: ${names.join(',')}`);
  function memoryBackend(seedProducts=[],seedActivity=[]){

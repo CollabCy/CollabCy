@@ -30,7 +30,8 @@ export function websiteListingKey(value:string){
   const href=safeWebsite(value);
   if(!href)return '';
   try{
-    let host=new URL(href).hostname.toLowerCase();
+    let host=new URL(href).hostname.toLowerCase().replace(/\.+$/,'');
+    if(!host||host.startsWith('[')||host.includes(':'))return '';
     if(host.startsWith('www.'))host=host.slice(4);
     return host;
   }catch{return '';}
